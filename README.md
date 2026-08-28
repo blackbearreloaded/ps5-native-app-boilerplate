@@ -149,6 +149,15 @@ name and promoted only after its transfer completes; `eboot.bin` and
 closing the app remain explicit manual steps. `undeploy` does not unregister a
 Shell entry. See [Deployment](docs/DEPLOYMENT.md).
 
+Do not relaunch an `.ffpfsc` immediately after replacing the same pathname:
+ShadowMountPlus may still have the previous image mounted. Fully close the
+title, deploy the completed replacement, then either restart ShadowMountPlus
+cleanly or restart the PS5. Afterward, start the approved services normally and
+wait for ShadowMountPlus to rediscover the title before launching it. Keeping
+the same title ID preserves separate `/download0` and save data; `/temp0` is
+temporary, `/app0` comes from the new image, and Shell presentation metadata
+may remain cached.
+
 For values used repeatedly on one workstation, copy the tracked example to the
 hidden, ignored local configuration and edit it:
 
