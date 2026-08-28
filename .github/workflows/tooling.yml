@@ -106,13 +106,17 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          shopt -s nullglob
-          images=(PPSA*.ffpfsc dist/PPSA*.ffpfsc)
-          if (( ${#images[@]} != 1 )); then
-            echo "Expected exactly one FFPFSC image." >&2
+          mapfile -d '' files < <(find . -type f -print0)
+          if (( ${#files[@]} != 1 )); then
+            echo "Expected exactly one release file." >&2
             exit 1
           fi
-          echo "image=${images[0]}" >> "$GITHUB_OUTPUT"
+          image=${files[0]#./}
+          if [[ $image != *.ffpfsc ]]; then
+            echo "The only release file must be an FFPFSC image." >&2
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         env:
