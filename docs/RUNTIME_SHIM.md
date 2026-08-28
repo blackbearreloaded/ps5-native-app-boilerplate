@@ -138,7 +138,8 @@ content.
 
 The generated binary is not tracked in Git. CI reproduces it from source,
 checks `runtime/libc.prx.sha256`, and includes it in the verified `.ffpfsc`
-image. Tagged GitHub Releases publish only that complete compressed image.
+image. Tagged GitHub Releases publish only that complete compressed image and
+its `SHA256SUMS`.
 
 ## Hardware validation
 

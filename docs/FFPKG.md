@@ -5,7 +5,7 @@ Every application or package build creates and validates
 `-OutputFormat` selections:
 
 All formats remain available for local development. Tagged GitHub Releases
-attach only the complete compressed `.ffpfsc` image.
+attach only the complete compressed `.ffpfsc` image and its `SHA256SUMS`.
 
 | Make target / selection | Additional output | Packaging tool |
 | --- | --- | --- |

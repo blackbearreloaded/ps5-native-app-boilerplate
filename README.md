@@ -227,7 +227,8 @@ git push origin 01.002.003
 ```
 
 The workflow rejects a tag that differs from `contentVersion` and publishes
-only the verified compressed FFPFSC image under that version. The image already
+the verified compressed FFPFSC image and its `SHA256SUMS` under that version.
+The image already
 contains the complete application and generated `libc.prx`. See [Application
 configuration](docs/CONFIGURATION.md) for every metadata field.
 
