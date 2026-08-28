@@ -228,7 +228,7 @@ The equivalent PowerShell selections are:
 The optional packaging tools are fetched only on first use. See
 [Build output formats](FFPKG.md).
 
-`runtime/libc.prx` is a generated, ignored file. Tagged GitHub Releases also
-publish the verified runtime as a standalone convenience download.
+`runtime/libc.prx` is a generated, ignored file included in the application.
+Tagged GitHub Releases publish only the complete compressed `.ffpfsc` image.
 
 Continue with [Deployment](DEPLOYMENT.md).

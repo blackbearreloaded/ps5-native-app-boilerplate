@@ -49,7 +49,8 @@ The release workflow rejects a tag that differs from
 `sce_sys/param.json`'s `contentVersion`. For ordinary development, keep
 `masterVersion` at `01.00` and increment `contentVersion` for each release.
 Change `masterVersion` only when intentionally changing the compatible release
-baseline.
+baseline. Each tagged GitHub Release contains only the complete compressed
+`.ffpfsc` application image.
 
 The loader-visible SDK and FSELF constants are internal build-format values,
 not application versions. They remain fixed to the cross-firmware-validated

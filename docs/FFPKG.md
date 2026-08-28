@@ -4,6 +4,9 @@ Every application or package build creates and validates
 `dist/<TITLE_ID>/`. The Make targets map to the same PowerShell
 `-OutputFormat` selections:
 
+All formats remain available for local development. Tagged GitHub Releases
+attach only the complete compressed `.ffpfsc` image.
+
 | Make target / selection | Additional output | Packaging tool |
 | --- | --- | --- |
 | `make app` / `Folder` | None | None |
