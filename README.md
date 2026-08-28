@@ -253,6 +253,29 @@ Open packaged files through absolute `/app0/assets/...` paths. `/app0` is
 read-only; writable application state belongs under `/download0`. The Hello
 World example loads and renders `assets/banner.txt` at runtime.
 
+### Application filesystem paths
+
+Access depends on the title metadata, loader, firmware, and successful mount
+APIs. These statuses describe this project's hardware-tested baseline; do not
+treat a conditional path as available until the application verifies it.
+
+| Path | Access | Status and intended use |
+| --- | --- | --- |
+| `/app0/` | Read-only | The application image ran on firmware 6.02 and 12.70; packaged asset reading was directly observed on 6.02. Contains `eboot.bin`, `sce_sys/`, `sce_module/`, and packaged assets. |
+| `/download0/` | Read/write, persistent | Validated across relaunches on 6.02 when `downloadDataSize` is positive. Use for configuration, pairing state, caches, and logs. Its host backing file is `/user/download/<TITLE_ID>/download0.dat`; applications must use `/download0`, not that host path. |
+| `/temp0/` | Read/write when mounted; temporary | Not available in the tested 6.02 ShadowMount native-title environment: opening a file returned `0x80020002`. Do not depend on it without a successful runtime probe. |
+| `/savedata0/`, `/savedata1/`, ... | Read/write after a successful SaveData mount | Not part of this baseline. The investigated ShadowMount title could not complete SaveData initialization, so no save-data mount or write was validated. |
+| `/common/lib/` | Read-only | System-provided shared modules; observed in process module paths. Never modify or package replacements there. |
+| `/common_ex/lib/` | Read-only when present | Firmware/loader-dependent extended shared-library namespace; not validated by this template. |
+| `/addcont0/`, ... | Normally read-only when mounted | Conditional add-on-content mounts requiring matching content and entitlement; untested here. |
+| `/trophy/` | System-managed, conditional | Not general application storage and untested here. Use the platform trophy APIs only when supported. |
+| `/usb0/`, `/usb1/`, ... | Conditional | External-storage visibility and write access depend on title permissions and loader context; untested here. |
+| `/data/`, `/user/` | Outside the supported app sandbox | Do not use from a normal application. Paths seen by payloads or FTP services do not imply application access. |
+
+`/download0` and mounted save data are separate from `/app0`, so replacing an
+application folder or `.ffpfsc` does not inherently replace them. Provide an
+export/import path for data that must survive title removal or cache clearing.
+
 ### Presentation assets
 
 Replace the icon and background with one command:
