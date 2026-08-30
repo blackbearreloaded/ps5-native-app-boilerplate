@@ -38,6 +38,9 @@ fi
 
 mapfile -d '' app_cpp_sources < <(find "$root/src" -type f \
     \( -name '*.cc' -o -name '*.cpp' \) -print0)
+mapfile -d '' example_cpp_sources < <(find "$root/examples" -type f \
+    \( -name '*.cc' -o -name '*.cpp' \) -print0)
+app_cpp_sources+=("${example_cpp_sources[@]}")
 app_cpp_sources+=("$root/tooling/native/app_crt.cpp" "$root/tooling/native/app_cpp_runtime.cpp")
 if (( ${#app_cpp_sources[@]} )); then
     "$tidy" "${app_cpp_sources[@]}" --quiet --warnings-as-errors='*' -- \
