@@ -97,10 +97,33 @@ global_read=0 path=/system/common/lib/libSceLibcInternal.sprx
 filesystem_lifecycle=0 operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir
 ```
 
-Hardware validation currently covers firmware 6.02 only. The request ABI is
-firmware-neutral, while kstuff owns the firmware-specific layout selection.
-Other whitelisted firmware revisions must not be described as hardware-tested
-until validated on those consoles.
+## Firmware 12.70 evidence
+
+The same application executable and modified kstuff loader passed on firmware
+12.70:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| kstuff commit | `3a605e25a2f833b6d9ffc78910d06b2775d2aa8f` |
+| `ps5-kstuff-ldr/kstuff.elf` | `c4f89604e00dc7d7239bb8fe2e29039b99ada7498d415ec697c2ce279e88e7b3` |
+| application commit | `2e5d27f07f45b43d781d5279f721781870bfb48d` |
+| validation `eboot.bin` | `cbf152a7c2dff5c16d7506cf0179719c26036001061ab1be217f722d0a171c77` |
+
+The folder candidate registered as `PPSA99791`, entered the app as PID `95`,
+and reported `PASS stage=0`. It began without `/data` access, rejected each
+malformed control request, accepted first and repeated elevation requests,
+acquired the documented credential profile, read a global system library, and
+completed the reversible filesystem lifecycle. The proof receipt was retrieved
+independently over FTP.
+
+The exact title then closed normally. ShadowMount recorded the game stop, no
+crash or panic marker appeared, and FTP `2121`, klog `3232`, and elfldr `9021`
+remained responsive.
+
+Hardware validation covers firmware 6.02 and 12.70. The request ABI remains
+firmware-neutral; kstuff owns firmware-specific layout selection. Other
+whitelisted firmware revisions must not be described as hardware-tested until
+validated on those consoles.
 
 ## Scope
 
