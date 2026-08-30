@@ -31,6 +31,21 @@ The example enters through libkernel's syscall wrapper and kstuff's existing
 | Argument 2 | ABI version `1` |
 | Argument 3 | Data-access profile `1` |
 
+The app-side integration is intentionally isolated in one function:
+
+```cpp
+[[nodiscard]] SyscallResult request_kstuff_self_elevation() noexcept
+{
+    return kstuff_request(self_elevation_operation, request_magic,
+                          request_version, data_access_profile);
+}
+```
+
+`request_kstuff_self_elevation()` expresses the application operation;
+`kstuff_request()` contains the low-level bridge transport. The matching
+kernel-side handler validates the request and elevates only the calling
+process.
+
 A zero return value means kstuff applied and reread the requested state.
 Unknown magic, ABI versions, profiles, and firmware fail closed. With the PS5
 libkernel wrapper, rejected requests return `-1` and set `errno`.

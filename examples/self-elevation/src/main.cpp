@@ -152,6 +152,12 @@ SyscallResult kstuff_request(std::uint32_t operation, std::uint64_t argument0,
     return {value, failed != 0, *error_location};
 }
 
+[[nodiscard]] SyscallResult request_kstuff_self_elevation() noexcept
+{
+    return kstuff_request(self_elevation_operation, request_magic, request_version,
+                          data_access_profile);
+}
+
 void report(const char *message) noexcept
 {
     std::array<char, 320> debug_message{};
@@ -394,8 +400,7 @@ int main()
     if (succeeded(bridge) && post_rejection_control < 0)
     {
         report_checkpoint("first elevation begin");
-        first_elevation = kstuff_request(self_elevation_operation, request_magic, request_version,
-                                         data_access_profile);
+        first_elevation = request_kstuff_self_elevation();
         report_checkpoint("first elevation end", first_elevation);
         if (!succeeded(first_elevation))
             stage = Stage::first_elevation;
@@ -403,8 +408,7 @@ int main()
     if (succeeded(first_elevation))
     {
         report_checkpoint("repeated elevation begin");
-        repeated_elevation = kstuff_request(self_elevation_operation, request_magic,
-                                            request_version, data_access_profile);
+        repeated_elevation = request_kstuff_self_elevation();
         report_checkpoint("repeated elevation end", repeated_elevation);
         if (!succeeded(repeated_elevation) && stage == Stage::pass)
             stage = Stage::repeated_elevation;
