@@ -86,6 +86,20 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+      - name: Build self-elevation acceptance image
+        if: github.event_name == 'pull_request' && hashFiles('examples/self-elevation/src/main.cpp') != ''
+        run: make self-elevation-ffpfsc
+
+      - name: Upload self-elevation acceptance image
+        if: github.event_name == 'pull_request' && hashFiles('examples/self-elevation/src/main.cpp') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: self-elevation-example-${{ github.sha }}
+          path: dist/PPSA99791.ffpfsc
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
   release:
     name: GitHub release
     if: github.ref_type == 'tag'
