@@ -11,6 +11,10 @@ APP_DEFINITIONS ?=
 APP_INCLUDE_PATHS ?=
 APP_STATIC_ARCHIVES ?=
 APP_RUNTIME_MODULES ?=
+APP_SOURCE_DIR ?=
+APP_PARAM ?=
+APP_SCE_SYS ?=
+APP_ASSETS ?=
 PACBREW_PACKAGES ?=
 PACBREW_INCLUDE_PATHS ?=
 PACBREW_STATIC_ARCHIVES ?=
@@ -30,6 +34,7 @@ HOST_TEST_CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
 HOST_TEST_LDFLAGS ?= -Wl,--gc-sections
 GTEST_ARGS ?=
 export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
+export APP_SOURCE_DIR APP_PARAM APP_SCE_SYS APP_ASSETS
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
 export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
 export TITLE_ID APP_NAME APP_CATEGORY CONTENT_SUFFIX
@@ -40,7 +45,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh \
 	$(wildcard tooling/native/runtime/*.txt)
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages self-elevation-ffpfsc deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -124,6 +129,13 @@ packages: $(RUNTIME)
 	@printf '%s\n' '==> [packages] Building the app folder and both package formats'
 	@bash tools/build.sh All
 
+self-elevation-ffpfsc: $(RUNTIME)
+	@printf '%s\n' '==> [self-elevation] Building the direct kstuff-request proof image'
+	@APP_SOURCE_DIR=examples/self-elevation/src \
+		APP_PARAM=examples/self-elevation/sce_sys/param.json \
+		APP_SCE_SYS=sce_sys APP_ASSETS= \
+		bash tools/build.sh Ffpfsc
+
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
@@ -181,6 +193,7 @@ help:
 	  'make ffpkg           Build the folder and UFS2 .ffpkg image' \
 	  'make ffpfsc          Build the folder and compressed .ffpfsc image' \
 	  'make packages        Build folder, .ffpkg, and .ffpfsc outputs' \
+	  'make self-elevation-ffpfsc  Build the direct kstuff-request proof image' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
 	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES' \

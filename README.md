@@ -32,6 +32,10 @@ on 6.02 and 12.70; validate the exact artifact on other target environments
 before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
+An opt-in [self-elevation example](docs/SELF_ELEVATION.md) validates a native
+app requesting its own data-access profile from a compatible kstuff build. It
+is intentionally separate from the default sandboxed skeleton.
+
 ## What is included
 
 | Feature | Included implementation |
@@ -379,6 +383,7 @@ tests/                        Host-native C++ unit and tooling integration tests
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
+| [Self-elevation example](docs/SELF_ELEVATION.md) | Versioned kstuff request and `/data` acceptance test |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |
 
