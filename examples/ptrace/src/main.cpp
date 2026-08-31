@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Attaches only to the explicitly launched test helper, replaces and restores
- * one sentinel while the helper is stopped, and always attempts to detach.
+ * one sentinel while stopped, restores it, then terminates only that owned
+ * helper through the tracing interface.
  */
 
 #include <array>
@@ -31,9 +32,10 @@ constexpr std::uint64_t wait4_syscall = 7;
 constexpr std::uint64_t ptrace_syscall = 26;
 constexpr std::uint64_t wait_no_hang = 1;
 constexpr unsigned int trace_wait_attempts = 200;
+constexpr unsigned int trace_stop_event_limit = 4;
 constexpr std::uint32_t trace_wait_interval_microseconds = 10000;
+constexpr std::uint64_t ptrace_kill = 8;
 constexpr std::uint64_t ptrace_attach = 10;
-constexpr std::uint64_t ptrace_detach = 11;
 constexpr std::uint64_t ptrace_io = 12;
 constexpr int ptrace_read_data = 1;
 constexpr int ptrace_write_data = 2;
@@ -89,8 +91,9 @@ enum class Stage : int
     replacement_verify = 10,
     marker_restore = 11,
     restoration_verify = 12,
-    final_detach = 13,
-    receipt = 14,
+    helper_kill = 13,
+    helper_termination = 14,
+    receipt = 15,
 };
 
 extern "C"
@@ -196,10 +199,11 @@ SyscallResult ptrace_request(std::uint64_t request, std::int32_t pid, void *addr
                               reinterpret_cast<std::uint64_t>(address), data);
 }
 
-int ptrace_transfer(std::uint64_t request, const HelperInfo &info, std::uint64_t &value) noexcept
+int ptrace_transfer(std::uint64_t request, const HelperInfo &info, std::uint64_t remote_address,
+                    std::uint64_t &value) noexcept
 {
     PtraceIoDescriptor descriptor{static_cast<int>(request), 0,
-                                  reinterpret_cast<void *>(info.address), &value, sizeof(value)};
+                                  reinterpret_cast<void *>(remote_address), &value, sizeof(value)};
     const SyscallResult result = ptrace_request(ptrace_io, info.pid, &descriptor, 0);
     return succeeded(result) ? 0 : static_cast<int>(result.value);
 }
@@ -216,6 +220,43 @@ bool wait_for_trace_stop(std::int32_t pid) noexcept
             return false;
         if (waited.value == static_cast<std::uint64_t>(pid))
             return (wait_status & 0x7f) == 0x7f;
+        if (waited.value != 0)
+            return false;
+        (void)sceKernelUsleep(trace_wait_interval_microseconds);
+    }
+    return false;
+}
+
+bool wait_for_trace_termination(std::int32_t pid) noexcept
+{
+    unsigned int stop_events = 0;
+    for (unsigned int attempt = 0; attempt < trace_wait_attempts; ++attempt)
+    {
+        int wait_status = 0;
+        const SyscallResult waited =
+            invoke_raw_syscall(wait4_syscall, static_cast<std::uint64_t>(pid),
+                               reinterpret_cast<std::uint64_t>(&wait_status), wait_no_hang, 0);
+        if (!succeeded(waited))
+            return false;
+        if (waited.value == static_cast<std::uint64_t>(pid))
+        {
+            if ((wait_status & 0x7f) == 0)
+                return true;
+            if ((wait_status & 0x7f) != 0x7f)
+                return true;
+            if ((wait_status & 0x7f) == 0x7f && stop_events++ < trace_stop_event_limit)
+            {
+                std::array<char, 96> message{};
+                (void)std::snprintf(message.data(), message.size(),
+                                    "[G6-PTRACE] continuing trace event status=%08x\n",
+                                    static_cast<unsigned int>(wait_status));
+                (void)sceKernelDebugOutText(0, message.data());
+                if (!succeeded(ptrace_request(ptrace_kill, pid)))
+                    return false;
+                continue;
+            }
+            return false;
+        }
         if (waited.value != 0)
             return false;
         (void)sceKernelUsleep(trace_wait_interval_microseconds);
@@ -240,10 +281,10 @@ class TraceGuard
         if (replacement_written_)
         {
             std::uint64_t original = original_value;
-            (void)ptrace_transfer(ptrace_write_data, info_, original);
+            (void)ptrace_transfer(ptrace_write_data, info_, info_.address, original);
         }
         if (attached_)
-            (void)ptrace_request(ptrace_detach, info_.pid);
+            (void)ptrace_request(ptrace_kill, info_.pid);
     }
     TraceGuard(const TraceGuard &) = delete;
     TraceGuard &operator=(const TraceGuard &) = delete;
@@ -260,7 +301,7 @@ class TraceGuard
     {
         replacement_written_ = false;
     }
-    void detached() noexcept
+    void completed() noexcept
     {
         attached_ = false;
     }
@@ -285,25 +326,31 @@ Stage validate_ptrace(const HelperInfo &info) noexcept
     (void)sceKernelDebugOutText(0, "[G6-PTRACE] helper stopped\n");
 
     std::uint64_t value = 0;
-    if (ptrace_transfer(ptrace_read_data, info, value) != 0 || value != original_value)
+    if (ptrace_transfer(ptrace_read_data, info, info.address, value) != 0 ||
+        value != original_value)
         return Stage::marker_read;
     value = replacement_value;
-    if (ptrace_transfer(ptrace_write_data, info, value) != 0)
+    if (ptrace_transfer(ptrace_write_data, info, info.address, value) != 0)
         return Stage::marker_write;
     guard.replacement_written();
     value = 0;
-    if (ptrace_transfer(ptrace_read_data, info, value) != 0 || value != replacement_value)
+    if (ptrace_transfer(ptrace_read_data, info, info.address, value) != 0 ||
+        value != replacement_value)
         return Stage::replacement_verify;
     value = original_value;
-    if (ptrace_transfer(ptrace_write_data, info, value) != 0)
+    if (ptrace_transfer(ptrace_write_data, info, info.address, value) != 0)
         return Stage::marker_restore;
     value = 0;
-    if (ptrace_transfer(ptrace_read_data, info, value) != 0 || value != original_value)
+    if (ptrace_transfer(ptrace_read_data, info, info.address, value) != 0 ||
+        value != original_value)
         return Stage::restoration_verify;
     guard.restored();
-    if (!succeeded(ptrace_request(ptrace_detach, info.pid)))
-        return Stage::final_detach;
-    guard.detached();
+
+    if (!succeeded(ptrace_request(ptrace_kill, info.pid)))
+        return Stage::helper_kill;
+    if (!wait_for_trace_termination(info.pid))
+        return Stage::helper_termination;
+    guard.completed();
     return Stage::pass;
 }
 
@@ -354,18 +401,25 @@ int main()
     if (stage == Stage::pass)
         stage = validate_ptrace(info);
 
+    const int stage_value = static_cast<int>(stage);
+    const bool restored =
+        stage == Stage::pass || stage_value >= static_cast<int>(Stage::helper_kill);
+    const bool kill_requested =
+        stage == Stage::pass || stage_value >= static_cast<int>(Stage::helper_termination);
     std::array<char, 640> receipt{};
-    const int receipt_length = std::snprintf(
-        receipt.data(), receipt.size(),
-        "result=%s stage=%d app_pid=%d helper_pid=%d\n"
-        "sandbox_control=%08x probe_error=%d elevation_error=%d helper_read=%d\n"
-        "address=%016llx original=%016llx replacement=%016llx restored=%s detached=%s\n",
-        stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), own_pid, info.pid,
-        static_cast<std::uint32_t>(sandbox_control), probe_error, elevation_error, helper_read,
-        static_cast<unsigned long long>(info.address),
-        static_cast<unsigned long long>(info.original),
-        static_cast<unsigned long long>(info.replacement),
-        stage == Stage::pass ? "yes" : "best-effort", stage == Stage::pass ? "yes" : "best-effort");
+    const int receipt_length =
+        std::snprintf(receipt.data(), receipt.size(),
+                      "result=%s stage=%d app_pid=%d helper_pid=%d\n"
+                      "sandbox_control=%08x probe_error=%d elevation_error=%d helper_read=%d\n"
+                      "address=%016llx original=%016llx replacement=%016llx restored=%s\n"
+                      "helper_kill_requested=%s helper_termination_confirmed=%s\n",
+                      stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), own_pid,
+                      info.pid, static_cast<std::uint32_t>(sandbox_control), probe_error,
+                      elevation_error, helper_read, static_cast<unsigned long long>(info.address),
+                      static_cast<unsigned long long>(info.original),
+                      static_cast<unsigned long long>(info.replacement),
+                      restored ? "yes" : "best-effort", kill_requested ? "yes" : "no",
+                      stage == Stage::pass ? "yes" : "no");
     if (elevation_error == 0 && receipt_length > 0 &&
         static_cast<std::size_t>(receipt_length) < receipt.size() &&
         write_receipt(receipt.data(), static_cast<std::size_t>(receipt_length)) != 0 &&
@@ -374,7 +428,7 @@ int main()
 
     std::array<char, 192> summary{};
     (void)std::snprintf(summary.data(), summary.size(),
-                        "%s: DEBUGGING | owned ptrace read, write, restore, detach | stage=%d",
+                        "%s: DEBUGGING | owned ptrace read, write, restore, terminate | stage=%d",
                         stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage));
     report(summary.data());
     stay_alive();

@@ -21,7 +21,7 @@ constexpr std::uint16_t file_mode_0640 = 0x01a0;
 constexpr std::uint16_t file_mode_0666 = 0x01b6;
 constexpr std::uint16_t file_mode_0777 = 0x01ff;
 
-constexpr char receipt_path[] = "/data/self-elevation-validation.txt";
+constexpr char data_file_path[] = "/data/hello-from-sandbox.txt";
 constexpr char working_directory[] = "/data/self-elevation-validation";
 constexpr char temporary_path[] = "/data/self-elevation-validation/stage.tmp";
 constexpr char renamed_path[] = "/data/self-elevation-validation/stage.dat";
@@ -57,7 +57,7 @@ enum class Stage : int
     kernel_inspection_after = 6,
     global_read = 7,
     filesystem_lifecycle = 8,
-    receipt = 9,
+    data_file = 9,
 };
 
 extern "C"
@@ -260,11 +260,12 @@ int probe_read_only_open(const char *path) noexcept
     return input.valid() ? 0 : input.get();
 }
 
-int write_and_verify_receipt(const char *text, std::size_t length) noexcept
+int write_read_verify_data_file(const char *text, std::size_t length) noexcept
 {
-    (void)sceKernelUnlink(receipt_path);
+    (void)sceKernelUnlink(data_file_path);
     {
-        KernelFile output{sceKernelOpen(receipt_path, open_write_create_truncate, file_mode_0666)};
+        KernelFile output{
+            sceKernelOpen(data_file_path, open_write_create_truncate, file_mode_0666)};
         if (!output.valid())
             return 1;
         if (sceKernelWrite(output.get(), text, length) != static_cast<std::int64_t>(length))
@@ -275,7 +276,7 @@ int write_and_verify_receipt(const char *text, std::size_t length) noexcept
     if (length > actual.size())
         return 3;
     {
-        KernelFile input{sceKernelOpen(receipt_path, open_read_only, 0)};
+        KernelFile input{sceKernelOpen(data_file_path, open_read_only, 0)};
         if (!input.valid())
             return 4;
         if (sceKernelRead(input.get(), actual.data(), length) != static_cast<std::int64_t>(length))
@@ -293,11 +294,11 @@ int main()
     const int physical_memory_before = probe_read_only_open(physical_memory_path);
     Stage stage = Stage::pass;
 
-    int sandbox_control = sceKernelOpen(receipt_path, open_write_create_truncate, file_mode_0666);
+    int sandbox_control = sceKernelOpen(data_file_path, open_write_create_truncate, file_mode_0666);
     if (sandbox_control >= 0)
     {
         (void)sceKernelClose(sandbox_control);
-        (void)sceKernelUnlink(receipt_path);
+        (void)sceKernelUnlink(data_file_path);
         report("SELF ELEVATION CONTROL INVALID: /data was already writable");
         stay_alive();
     }
@@ -361,10 +362,10 @@ int main()
         report_checkpoint("kernel-memory device probes end");
     }
 
-    std::array<char, 1024> receipt{};
-    const int receipt_length = std::snprintf(
-        receipt.data(), receipt.size(),
-        "hello from the self-elevating sandbox app\n"
+    std::array<char, 1024> data_file{};
+    const int data_file_length = std::snprintf(
+        data_file.data(), data_file.size(),
+        "hello from the sandboxed app\n"
         "result=%s stage=%d pid=%d\n"
         "sandbox_before=%08x probe_error=%d\n"
         "inspection_before_error=%d elevation_error=%d repeated_elevation_error=%d\n"
@@ -373,6 +374,7 @@ int main()
         "global_read=%d path=%s\n"
         "filesystem_lifecycle=%d "
         "operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir\n"
+        "data_file=write,close,reopen,read,compare path=%s\n"
         "kernel_memory_open_before=%08x,%08x after=%08x,%08x paths=%s,%s\n",
         stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), pid,
         static_cast<std::uint32_t>(sandbox_control), probe_error, inspection_before_error,
@@ -381,20 +383,20 @@ int main()
         static_cast<unsigned long long>(authority_before),
         static_cast<unsigned long long>(authority_after), inspection_after_error,
         static_cast<unsigned long long>(system_auth_id), global_read_result, system_library_path,
-        filesystem_result, static_cast<std::uint32_t>(kernel_memory_before),
+        filesystem_result, data_file_path, static_cast<std::uint32_t>(kernel_memory_before),
         static_cast<std::uint32_t>(physical_memory_before),
         static_cast<std::uint32_t>(kernel_memory_after),
         static_cast<std::uint32_t>(physical_memory_after), kernel_memory_path,
         physical_memory_path);
 
-    int receipt_result = -1;
-    if (elevation_error == 0 && receipt_length > 0 &&
-        static_cast<std::size_t>(receipt_length) < receipt.size())
+    int data_file_result = -1;
+    if (elevation_error == 0 && data_file_length > 0 &&
+        static_cast<std::size_t>(data_file_length) < data_file.size())
     {
-        receipt_result =
-            write_and_verify_receipt(receipt.data(), static_cast<std::size_t>(receipt_length));
-        if (receipt_result != 0 && stage == Stage::pass)
-            stage = Stage::receipt;
+        data_file_result = write_read_verify_data_file(data_file.data(),
+                                                       static_cast<std::size_t>(data_file_length));
+        if (data_file_result != 0 && stage == Stage::pass)
+            stage = Stage::data_file;
     }
 
     std::array<char, 256> summary{};
