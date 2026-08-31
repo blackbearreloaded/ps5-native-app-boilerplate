@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Validates the versioned kstuff request contract, repeated elevation,
- * credential changes, and a reversible filesystem lifecycle under /data.
+ * credential changes, a bounded kernel credential read, a reversible
+ * filesystem lifecycle under /data, and read-only device-node checks.
  */
 
 #include <array>
@@ -26,13 +27,18 @@ constexpr char temporary_path[] = "/data/self-elevation-validation/stage.tmp";
 constexpr char renamed_path[] = "/data/self-elevation-validation/stage.dat";
 constexpr char lifecycle_payload[] = "self-elevation filesystem lifecycle\n";
 constexpr char system_library_path[] = "/system/common/lib/libSceLibcInternal.sprx";
+constexpr char kernel_memory_path[] = "/dev/kmem";
+constexpr char physical_memory_path[] = "/dev/mem";
 
 constexpr std::uint32_t getppid_syscall = 0x27;
 constexpr std::uint32_t bridge_check_operation = UINT32_C(0xffffffff);
 constexpr std::uint32_t self_elevation_operation = 7;
+constexpr std::uint32_t self_inspection_operation = 8;
 constexpr std::uint64_t request_magic = UINT64_C(0x31564c4553355350);
 constexpr std::uint64_t request_version = 1;
 constexpr std::uint64_t data_access_profile = 1;
+constexpr std::uint64_t auth_id_selector = 1;
+constexpr std::uint64_t system_auth_id = UINT64_C(0x4801000000000013);
 constexpr std::uint64_t invalid_argument_error = 22;
 
 struct NotificationRequest
@@ -70,6 +76,8 @@ enum class Stage : int
     global_read = 10,
     filesystem_lifecycle = 11,
     receipt = 12,
+    kernel_inspection_before = 13,
+    kernel_inspection_after = 14,
 };
 
 extern "C"
@@ -207,6 +215,11 @@ void report_checkpoint(const char *name) noexcept
     return !result.failed && result.value == 0;
 }
 
+[[nodiscard]] bool inspected(const SyscallResult &result) noexcept
+{
+    return !result.failed && result.value != 0;
+}
+
 [[nodiscard]] bool rejected_as_invalid(const SyscallResult &result) noexcept
 {
     return (result.failed && result.value == invalid_argument_error) ||
@@ -323,6 +336,12 @@ int validate_global_read() noexcept
     return (prefix[0] | prefix[1] | prefix[2] | prefix[3]) != 0 ? 0 : 3;
 }
 
+int probe_read_only_open(const char *path) noexcept
+{
+    KernelFile input{sceKernelOpen(path, open_read_only, 0)};
+    return input.valid() ? 0 : input.get();
+}
+
 int write_and_verify_receipt(const char *text, std::size_t length) noexcept
 {
     (void)sceKernelUnlink(receipt_path);
@@ -352,6 +371,8 @@ int main()
 {
     const int pid = getpid();
     const Credentials before = read_credentials();
+    const int kernel_memory_before = probe_read_only_open(kernel_memory_path);
+    const int physical_memory_before = probe_read_only_open(physical_memory_path);
     Stage stage = Stage::pass;
 
     int sandbox_control = sceKernelOpen(receipt_path, open_write_create_truncate, file_mode_0666);
@@ -369,8 +390,10 @@ int main()
                                                        request_version, data_access_profile);
     const SyscallResult invalid_version = kstuff_request(self_elevation_operation, request_magic,
                                                          request_version + 1, data_access_profile);
-    const SyscallResult invalid_profile = kstuff_request(self_elevation_operation, request_magic,
-                                                         request_version, data_access_profile + 1);
+    const SyscallResult invalid_profile =
+        kstuff_request(self_elevation_operation, request_magic, request_version, 0);
+    const SyscallResult kernel_inspection_before =
+        kstuff_request(self_inspection_operation, request_magic, request_version, auth_id_selector);
 
     if (!succeeded(bridge))
         stage = Stage::bridge;
@@ -380,6 +403,8 @@ int main()
         stage = Stage::invalid_version;
     else if (!rejected_as_invalid(invalid_profile))
         stage = Stage::invalid_profile;
+    else if (!inspected(kernel_inspection_before))
+        stage = Stage::kernel_inspection_before;
 
     const int post_rejection_control =
         sceKernelOpen(receipt_path, open_write_create_truncate, file_mode_0666);
@@ -397,6 +422,9 @@ int main()
     Credentials after{};
     int global_read_result = -1;
     int filesystem_result = -1;
+    int kernel_memory_after = -1;
+    int physical_memory_after = -1;
+    SyscallResult kernel_inspection_after{0, true, 0};
     if (succeeded(bridge) && post_rejection_control < 0)
     {
         report_checkpoint("first elevation begin");
@@ -417,6 +445,14 @@ int main()
         report_checkpoint("credentials end");
         if (!has_root_identity(after) && stage == Stage::pass)
             stage = Stage::credentials;
+        report_checkpoint("kernel inspection begin");
+        kernel_inspection_after = kstuff_request(self_inspection_operation, request_magic,
+                                                 request_version, auth_id_selector);
+        report_checkpoint("kernel inspection end", kernel_inspection_after);
+        if ((!inspected(kernel_inspection_after) ||
+             kernel_inspection_after.value != system_auth_id) &&
+            stage == Stage::pass)
+            stage = Stage::kernel_inspection_after;
         report_checkpoint("global read begin");
         global_read_result = validate_global_read();
         report_checkpoint("global read end");
@@ -427,6 +463,10 @@ int main()
         report_checkpoint("filesystem end");
         if (filesystem_result != 0 && stage == Stage::pass)
             stage = Stage::filesystem_lifecycle;
+        report_checkpoint("kernel-memory device probes begin");
+        kernel_memory_after = probe_read_only_open(kernel_memory_path);
+        physical_memory_after = probe_read_only_open(physical_memory_path);
+        report_checkpoint("kernel-memory device probes end");
     }
 
     std::array<char, 1024> receipt{};
@@ -438,9 +478,11 @@ int main()
         "bridge=%s:%llu invalid_magic=%s:%llu invalid_version=%s:%llu invalid_profile=%s:%llu\n"
         "first_elevation=%s:%llu repeated_elevation=%s:%llu\n"
         "credentials_before=%d,%d,%d,%d credentials_after=%d,%d,%d,%d\n"
+        "kernel_auth_id_before=%s:%016llx after=%s:%016llx expected=%016llx\n"
         "global_read=%d path=%s\n"
         "filesystem_lifecycle=%d "
-        "operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir\n",
+        "operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir\n"
+        "kernel_memory_open_before=%08x,%08x after=%08x,%08x paths=%s,%s\n",
         stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), pid,
         static_cast<std::uint32_t>(sandbox_control),
         static_cast<std::uint32_t>(post_rejection_control), bridge.failed ? "err" : "ok",
@@ -454,7 +496,16 @@ int main()
         repeated_elevation.failed ? "err" : "ok",
         static_cast<unsigned long long>(repeated_elevation.value), before.uid, before.effective_uid,
         before.gid, before.effective_gid, after.uid, after.effective_uid, after.gid,
-        after.effective_gid, global_read_result, system_library_path, filesystem_result);
+        after.effective_gid, kernel_inspection_before.failed ? "err" : "ok",
+        static_cast<unsigned long long>(kernel_inspection_before.value),
+        kernel_inspection_after.failed ? "err" : "ok",
+        static_cast<unsigned long long>(kernel_inspection_after.value),
+        static_cast<unsigned long long>(system_auth_id), global_read_result, system_library_path,
+        filesystem_result, static_cast<std::uint32_t>(kernel_memory_before),
+        static_cast<std::uint32_t>(physical_memory_before),
+        static_cast<std::uint32_t>(kernel_memory_after),
+        static_cast<std::uint32_t>(physical_memory_after), kernel_memory_path,
+        physical_memory_path);
 
     int receipt_result = -1;
     if (succeeded(first_elevation) && receipt_length > 0 &&
@@ -467,12 +518,9 @@ int main()
     }
 
     std::array<char, 256> summary{};
-    (void)std::snprintf(
-        summary.data(), summary.size(),
-        "SELF ELEVATION %s pid=%d stage=%d read=%d fs=%d receipt=%d uid=%d/%d gid=%d/%d",
-        stage == Stage::pass ? "PASS" : "FAIL", pid, static_cast<int>(stage), global_read_result,
-        filesystem_result, receipt_result, after.uid, after.effective_uid, after.gid,
-        after.effective_gid);
+    (void)std::snprintf(summary.data(), summary.size(),
+                        "%s: DATA ACCESS | identity, system read, /data lifecycle | stage=%d",
+                        stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage));
     report(summary.data());
     stay_alive();
 }

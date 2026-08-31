@@ -14,9 +14,9 @@ payload nor connects to elfldr.
 make self-elevation-ffpfsc
 ```
 
-The command builds title `PPSA99791` from
+The command builds title `PPSA99792` from
 `examples/self-elevation/src/main.cpp` and writes both the deployable directory
-and `dist/PPSA99791.ffpfsc`.
+and `dist/PPSA99792.ffpfsc`.
 
 ## Request contract
 
@@ -30,6 +30,10 @@ The example enters through libkernel's syscall wrapper and kstuff's existing
 | Argument 1 | Magic `0x31564c4553355350` |
 | Argument 2 | ABI version `1` |
 | Argument 3 | Data-access profile `1` |
+
+The same application calls bounded inspection operation `8`, selector `1`, to
+read its own kernel credential authority ID before and after elevation. This
+operation accepts no address and performs no kernel write.
 
 The app-side integration is intentionally isolated in one function:
 
@@ -67,69 +71,41 @@ The application verifies all of the following in one launch:
 5. A global system library can be opened and read.
 6. A reversible `/data` lifecycle succeeds: create directory, create file,
    write, chmod, stat, rename, read, verify, unlink, and remove directory.
-7. `/data/self-elevation-validation.txt` is written and read back.
+7. The caller's kernel-resident authority ID matches the requested profile.
+8. `/data/self-elevation-validation.txt` is written and read back.
 
 The app then remains alive for normal shell-mediated closure. Do not call
 `exit()` as a substitute for the title-aware close path.
 
-## Firmware 6.02 evidence
+## Hardware evidence
 
-The exact candidate passed twice in separate processes without rebooting
-kstuff between launches:
-
-| Artifact | SHA-256 |
-| --- | --- |
-| kstuff commit | `a79695da175aefd753d7d614a57d2da70cbd3fab` |
-| `ps5-kstuff/payload.bin` | `d4d10bd1c4d1e445c2ac68b78b55d921266dfde8890ba34dfd1ab2429b6d288a` |
-| `ps5-kstuff-ldr/kstuff.elf` | `c4f89604e00dc7d7239bb8fe2e29039b99ada7498d415ec697c2ce279e88e7b3` |
-| validation `eboot.bin` | `cbf152a7c2dff5c16d7506cf0179719c26036001061ab1be217f722d0a171c77` |
-| validation FFPFSC | `b1ee41094119fcc851207870612306d74dcb1d2e816bda74d1b1a24b0d53d2f2` |
-
-Both runs reported `PASS stage=0`, used different PIDs (`105` and `108`),
-closed normally, released their ShadowMount runtime layers, and left FTP,
-klog, and elfldr responsive. The independently retrieved receipt recorded:
+The original profile-1 path passed on firmware 6.02 and 12.70. The extended
+firmware 6.02 run also confirmed the bounded authority read:
 
 ```text
 sandbox_before=80020002 sandbox_after_rejections=80020002
 first_elevation=ok:0 repeated_elevation=ok:0
 credentials_before=1,1,1,1 credentials_after=0,0,0,1
+kernel_auth_id_before=ok:4400001084c2052d after=ok:4801000000000013
 global_read=0 path=/system/common/lib/libSceLibcInternal.sprx
 filesystem_lifecycle=0 operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir
 ```
-
-## Firmware 12.70 evidence
-
-The same application executable and modified kstuff loader passed on firmware
-12.70:
-
-| Artifact | SHA-256 |
-| --- | --- |
-| kstuff commit | `3a605e25a2f833b6d9ffc78910d06b2775d2aa8f` |
-| `ps5-kstuff-ldr/kstuff.elf` | `c4f89604e00dc7d7239bb8fe2e29039b99ada7498d415ec697c2ce279e88e7b3` |
-| application commit | `2e5d27f07f45b43d781d5279f721781870bfb48d` |
-| validation `eboot.bin` | `cbf152a7c2dff5c16d7506cf0179719c26036001061ab1be217f722d0a171c77` |
-
-The folder candidate registered as `PPSA99791`, entered the app as PID `95`,
-and reported `PASS stage=0`. It began without `/data` access, rejected each
-malformed control request, accepted first and repeated elevation requests,
-acquired the documented credential profile, read a global system library, and
-completed the reversible filesystem lifecycle. The proof receipt was retrieved
-independently over FTP.
-
-The exact title then closed normally. ShadowMount recorded the game stop, no
-crash or panic marker appeared, and FTP `2121`, klog `3232`, and elfldr `9021`
-remained responsive.
 
 Hardware validation covers firmware 6.02 and 12.70. The request ABI remains
 firmware-neutral; kstuff owns firmware-specific layout selection. Other
 whitelisted firmware revisions must not be described as hardware-tested until
 validated on those consoles.
 
+See [the complete capability suite](CAPABILITY_SUITE.md) for profiles 2 and 3,
+the other bounded probes, build commands, run order, and exact acceptance
+results.
+
 ## Scope
 
 - Only the calling process can be modified; the API accepts no PID or kernel
   pointer.
-- The example performs no mount, device, kernel-memory, or other-process test.
+- The example performs only a bounded read of its own kernel-resident authority
+  ID; it exposes no kernel address.
 - No console setting or update behavior is accessed.
 - Use the smallest capability profile that serves the application. A regular
   sandboxed app remains the preferred default.

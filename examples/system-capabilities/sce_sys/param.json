@@ -7,9 +7,9 @@
   "attribute": 0,
   "attribute2": 0,
   "attribute3": 0,
-  "conceptId": "99792",
+  "conceptId": "99794",
   "contentBadgeType": 1,
-  "contentId": "UP9000-PPSA99792_00-SELFELEVATION001",
+  "contentId": "UP9000-PPSA99794_00-SYSTEMCAPS000001",
   "contentVersion": "01.000.000",
   "downloadDataSize": 256,
   "gameIntent": {
@@ -22,17 +22,17 @@
   "localizedParameters": {
     "defaultLanguage": "en-US",
     "en-US": {
-      "titleName": "Capability Proof: Data Access"
+      "titleName": "Capability Proof: System Access"
     }
   },
   "masterVersion": "01.00",
   "pubtools": {
-    "creationDate": "2026-08-30 00:00:00",
+    "creationDate": "2026-08-31 00:00:00",
     "loudnessSnd0": "-28.00",
     "toolVersion": "2.00"
   },
   "requiredSystemSoftwareVersion": "0x0000000000000000",
   "sdkVersion": "0x0000000000000000",
-  "titleId": "PPSA99792",
+  "titleId": "PPSA99794",
   "versionFileUri": ""
 }
