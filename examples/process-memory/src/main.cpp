@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <kstuff.h>
 
 namespace
 {
@@ -26,13 +27,7 @@ constexpr std::uint64_t helper_cookie = UINT64_C(0x6f574e4544473241);
 constexpr std::uint64_t original_value = UINT64_C(0x1122334455667788);
 constexpr std::uint64_t replacement_value = UINT64_C(0xa55aa55a5aa55aa5);
 
-constexpr std::uint64_t getppid_syscall = 39;
 constexpr std::uint64_t mdbg_call_syscall = 573;
-constexpr std::uint32_t bridge_check_operation = UINT32_C(0xffffffff);
-constexpr std::uint32_t self_elevation_operation = 7;
-constexpr std::uint64_t request_magic = UINT64_C(0x31564c4553355350);
-constexpr std::uint64_t request_version = 1;
-constexpr std::uint64_t process_memory_profile = 2;
 constexpr std::uint64_t mdbg_command_type = 1;
 constexpr std::uint64_t mdbg_read_operation = 0x12;
 constexpr std::uint64_t mdbg_write_operation = 0x13;
@@ -172,18 +167,6 @@ SyscallResult invoke_raw_syscall(std::uint64_t number, std::uint64_t argument0,
     return {number, failed != 0, *error_location};
 }
 
-SyscallResult kstuff_request(std::uint32_t operation, std::uint64_t argument0,
-                             std::uint64_t argument1, std::uint64_t argument2) noexcept
-{
-    return invoke_raw_syscall((static_cast<std::uint64_t>(operation) << 32) | getppid_syscall,
-                              argument0, argument1, argument2);
-}
-
-[[nodiscard]] bool succeeded(const SyscallResult &result) noexcept
-{
-    return !result.failed && result.value == 0;
-}
-
 int read_helper_info(HelperInfo &info) noexcept
 {
     KernelFile input{sceKernelOpen(helper_info_path, open_read_only, 0)};
@@ -321,19 +304,16 @@ int main()
         stage = Stage::sandbox_control;
     }
 
-    const SyscallResult bridge = kstuff_request(bridge_check_operation, request_magic,
-                                                request_version, process_memory_profile);
-    if (stage == Stage::pass && !succeeded(bridge))
+    const int probe_error = kstuff_probe();
+    if (stage == Stage::pass && probe_error != 0)
         stage = Stage::bridge;
-    const SyscallResult elevation = stage == Stage::pass
-                                        ? kstuff_request(self_elevation_operation, request_magic,
-                                                         request_version, process_memory_profile)
-                                        : SyscallResult{0, true, 0};
-    if (stage == Stage::pass && !succeeded(elevation))
+    const int elevation_error =
+        stage == Stage::pass ? kstuff_request_profile(KSTUFF_PROFILE_PROCESS_MEMORY) : -1;
+    if (stage == Stage::pass && elevation_error != 0)
         stage = Stage::elevation;
 
     HelperInfo info{};
-    const int helper_read = succeeded(elevation) ? read_helper_info(info) : -1;
+    const int helper_read = elevation_error == 0 ? read_helper_info(info) : -1;
     if (stage == Stage::pass && helper_read != 0)
         stage = Stage::helper_read;
     if (stage == Stage::pass && !valid_helper(info, own_pid))
@@ -342,20 +322,18 @@ int main()
         stage = validate_process_memory(info);
 
     std::array<char, 640> receipt{};
-    const int receipt_length = std::snprintf(
-        receipt.data(), receipt.size(),
-        "result=%s stage=%d app_pid=%d helper_pid=%d\n"
-        "sandbox_control=%08x bridge=%s:%llu elevation=%s:%llu helper_read=%d\n"
-        "address=%016llx original=%016llx replacement=%016llx restored=%s\n",
-        stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), own_pid, info.pid,
-        static_cast<std::uint32_t>(sandbox_control), bridge.failed ? "err" : "ok",
-        static_cast<unsigned long long>(bridge.value), elevation.failed ? "err" : "ok",
-        static_cast<unsigned long long>(elevation.value), helper_read,
-        static_cast<unsigned long long>(info.address),
-        static_cast<unsigned long long>(info.original),
-        static_cast<unsigned long long>(info.replacement),
-        stage == Stage::pass ? "yes" : "unknown");
-    if (succeeded(elevation) && receipt_length > 0 &&
+    const int receipt_length =
+        std::snprintf(receipt.data(), receipt.size(),
+                      "result=%s stage=%d app_pid=%d helper_pid=%d\n"
+                      "sandbox_control=%08x probe_error=%d elevation_error=%d helper_read=%d\n"
+                      "address=%016llx original=%016llx replacement=%016llx restored=%s\n",
+                      stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), own_pid,
+                      info.pid, static_cast<std::uint32_t>(sandbox_control), probe_error,
+                      elevation_error, helper_read, static_cast<unsigned long long>(info.address),
+                      static_cast<unsigned long long>(info.original),
+                      static_cast<unsigned long long>(info.replacement),
+                      stage == Stage::pass ? "yes" : "unknown");
+    if (elevation_error == 0 && receipt_length > 0 &&
         static_cast<std::size_t>(receipt_length) < receipt.size() &&
         write_receipt(receipt.data(), static_cast<std::size_t>(receipt_length)) != 0 &&
         stage == Stage::pass)

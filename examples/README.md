@@ -6,6 +6,10 @@ interface proposed in
 They are intentionally isolated from the boilerplate build, packaging, CI, and
 application metadata.
 
+Add the kstuff-lite repository's `include/` directory to the application's
+include search path. The examples include `<kstuff.h>` and therefore do not
+duplicate operation numbers, magic values, ABI versions, or syscall transport.
+
 | Source | Demonstrated capability |
 | --- | --- |
 | [`self-elevation/src/main.cpp`](self-elevation/src/main.cpp) | Request profile 1, inspect the caller's authority, read a system file, and validate a reversible `/data` lifecycle |

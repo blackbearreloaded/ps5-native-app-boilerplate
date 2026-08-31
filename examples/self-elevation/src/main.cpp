@@ -3,15 +3,15 @@
  * Copyright (C) 2026 BlackBearReloaded
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Validates the versioned kstuff request contract, repeated elevation,
- * credential changes, a bounded kernel credential read, a reversible
- * filesystem lifecycle under /data, and read-only device-node checks.
+ * Uses the public kstuff client to request data access, inspect the caller's
+ * authority, and validate reversible filesystem operations under /data.
  */
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <kstuff.h>
 
 namespace
 {
@@ -30,28 +30,12 @@ constexpr char system_library_path[] = "/system/common/lib/libSceLibcInternal.sp
 constexpr char kernel_memory_path[] = "/dev/kmem";
 constexpr char physical_memory_path[] = "/dev/mem";
 
-constexpr std::uint32_t getppid_syscall = 0x27;
-constexpr std::uint32_t bridge_check_operation = UINT32_C(0xffffffff);
-constexpr std::uint32_t self_elevation_operation = 7;
-constexpr std::uint32_t self_inspection_operation = 8;
-constexpr std::uint64_t request_magic = UINT64_C(0x31564c4553355350);
-constexpr std::uint64_t request_version = 1;
-constexpr std::uint64_t data_access_profile = 1;
-constexpr std::uint64_t auth_id_selector = 1;
 constexpr std::uint64_t system_auth_id = UINT64_C(0x4801000000000013);
-constexpr std::uint64_t invalid_argument_error = 22;
 
 struct NotificationRequest
 {
     std::uint8_t reserved[45];
     char message[3075];
-};
-
-struct SyscallResult
-{
-    std::uint64_t value;
-    bool failed;
-    int error;
 };
 
 struct Credentials
@@ -65,24 +49,19 @@ struct Credentials
 enum class Stage : int
 {
     pass = 0,
-    bridge = 2,
-    invalid_magic = 3,
-    invalid_version = 4,
-    invalid_profile = 5,
-    post_rejection_sandbox_control = 6,
-    first_elevation = 7,
-    repeated_elevation = 8,
-    credentials = 9,
-    global_read = 10,
-    filesystem_lifecycle = 11,
-    receipt = 12,
-    kernel_inspection_before = 13,
-    kernel_inspection_after = 14,
+    probe = 1,
+    kernel_inspection_before = 2,
+    first_elevation = 3,
+    repeated_elevation = 4,
+    credentials = 5,
+    kernel_inspection_after = 6,
+    global_read = 7,
+    filesystem_lifecycle = 8,
+    receipt = 9,
 };
 
 extern "C"
 {
-    int *__error();
     int getegid();
     int geteuid();
     int getgid();
@@ -140,32 +119,6 @@ NotificationRequest notification{};
         (void)sceKernelUsleep(1000000);
 }
 
-SyscallResult kstuff_request(std::uint32_t operation, std::uint64_t argument0,
-                             std::uint64_t argument1, std::uint64_t argument2) noexcept
-{
-    int *const error_location = __error();
-    *error_location = 0;
-    constexpr std::uintptr_t libkernel_syscall_entry_offset = 7;
-    const auto syscall_entry = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(&getpid) +
-                                                        libkernel_syscall_entry_offset);
-    std::uint64_t value = (static_cast<std::uint64_t>(operation) << 32) | getppid_syscall;
-    register std::uint64_t argument3 asm("r10") = 0;
-    register std::uint64_t argument4 asm("r8") = 0;
-    register std::uint64_t argument5 asm("r9") = 0;
-    std::uint8_t failed = 0;
-    asm volatile("call *%[entry]\n\tsetc %1"
-                 : "+a"(value), "=qm"(failed), "+r"(argument3), "+r"(argument4), "+r"(argument5)
-                 : [entry] "r"(syscall_entry), "D"(argument0), "S"(argument1), "d"(argument2)
-                 : "rcx", "r11", "memory");
-    return {value, failed != 0, *error_location};
-}
-
-[[nodiscard]] SyscallResult request_kstuff_self_elevation() noexcept
-{
-    return kstuff_request(self_elevation_operation, request_magic, request_version,
-                          data_access_profile);
-}
-
 void report(const char *message) noexcept
 {
     std::array<char, 320> debug_message{};
@@ -176,30 +129,11 @@ void report(const char *message) noexcept
     (void)sceKernelSendNotificationRequest(0, &notification, sizeof(notification), 0);
 }
 
-void report_controls(const SyscallResult &bridge, const SyscallResult &invalid_magic,
-                     const SyscallResult &invalid_version, const SyscallResult &invalid_profile,
-                     int sandbox_control) noexcept
-{
-    std::array<char, 320> message{};
-    (void)std::snprintf(message.data(), message.size(),
-                        "[SELF-ELEVATION] controls bridge=%u:%llx:%d magic=%u:%llx:%d "
-                        "version=%u:%llx:%d profile=%u:%llx:%d sandbox=%08x\n",
-                        bridge.failed, static_cast<unsigned long long>(bridge.value), bridge.error,
-                        invalid_magic.failed, static_cast<unsigned long long>(invalid_magic.value),
-                        invalid_magic.error, invalid_version.failed,
-                        static_cast<unsigned long long>(invalid_version.value),
-                        invalid_version.error, invalid_profile.failed,
-                        static_cast<unsigned long long>(invalid_profile.value),
-                        invalid_profile.error, static_cast<std::uint32_t>(sandbox_control));
-    (void)sceKernelDebugOutText(0, message.data());
-}
-
-void report_checkpoint(const char *name, const SyscallResult &result) noexcept
+void report_checkpoint(const char *name, int error) noexcept
 {
     std::array<char, 192> message{};
-    (void)std::snprintf(message.data(), message.size(),
-                        "[SELF-ELEVATION] %s carry=%u value=%llx errno=%d\n", name, result.failed,
-                        static_cast<unsigned long long>(result.value), result.error);
+    (void)std::snprintf(message.data(), message.size(), "[SELF-ELEVATION] %s error=%d\n", name,
+                        error);
     (void)sceKernelDebugOutText(0, message.data());
 }
 
@@ -208,22 +142,6 @@ void report_checkpoint(const char *name) noexcept
     std::array<char, 128> message{};
     (void)std::snprintf(message.data(), message.size(), "[SELF-ELEVATION] %s\n", name);
     (void)sceKernelDebugOutText(0, message.data());
-}
-
-[[nodiscard]] bool succeeded(const SyscallResult &result) noexcept
-{
-    return !result.failed && result.value == 0;
-}
-
-[[nodiscard]] bool inspected(const SyscallResult &result) noexcept
-{
-    return !result.failed && result.value != 0;
-}
-
-[[nodiscard]] bool rejected_as_invalid(const SyscallResult &result) noexcept
-{
-    return (result.failed && result.value == invalid_argument_error) ||
-           (result.value == UINT64_MAX && result.error == invalid_argument_error);
 }
 
 [[nodiscard]] Credentials read_credentials() noexcept
@@ -384,61 +302,37 @@ int main()
         stay_alive();
     }
 
-    const SyscallResult bridge =
-        kstuff_request(bridge_check_operation, request_magic, request_version, data_access_profile);
-    const SyscallResult invalid_magic = kstuff_request(self_elevation_operation, request_magic ^ 1,
-                                                       request_version, data_access_profile);
-    const SyscallResult invalid_version = kstuff_request(self_elevation_operation, request_magic,
-                                                         request_version + 1, data_access_profile);
-    const SyscallResult invalid_profile =
-        kstuff_request(self_elevation_operation, request_magic, request_version, 0);
-    const SyscallResult kernel_inspection_before =
-        kstuff_request(self_inspection_operation, request_magic, request_version, auth_id_selector);
+    const int probe_error = kstuff_probe();
+    if (probe_error != 0)
+        stage = Stage::probe;
 
-    if (!succeeded(bridge))
-        stage = Stage::bridge;
-    else if (!rejected_as_invalid(invalid_magic))
-        stage = Stage::invalid_magic;
-    else if (!rejected_as_invalid(invalid_version))
-        stage = Stage::invalid_version;
-    else if (!rejected_as_invalid(invalid_profile))
-        stage = Stage::invalid_profile;
-    else if (!inspected(kernel_inspection_before))
+    std::uint64_t authority_before = 0;
+    const int inspection_before_error =
+        stage == Stage::pass ? kstuff_get_authority_id(&authority_before) : -1;
+    if (stage == Stage::pass && inspection_before_error != 0)
         stage = Stage::kernel_inspection_before;
 
-    const int post_rejection_control =
-        sceKernelOpen(receipt_path, open_write_create_truncate, file_mode_0666);
-    if (post_rejection_control >= 0)
-    {
-        (void)sceKernelClose(post_rejection_control);
-        (void)sceKernelUnlink(receipt_path);
-        stage = Stage::post_rejection_sandbox_control;
-    }
-    report_controls(bridge, invalid_magic, invalid_version, invalid_profile,
-                    post_rejection_control);
+    report_checkpoint("data-access request begin");
+    const int elevation_error =
+        stage == Stage::pass ? kstuff_request_profile(KSTUFF_PROFILE_DATA_ACCESS) : -1;
+    report_checkpoint("data-access request end", elevation_error);
+    if (stage == Stage::pass && elevation_error != 0)
+        stage = Stage::first_elevation;
 
-    SyscallResult first_elevation{0, true, 0};
-    SyscallResult repeated_elevation{0, true, 0};
     Credentials after{};
     int global_read_result = -1;
     int filesystem_result = -1;
     int kernel_memory_after = -1;
     int physical_memory_after = -1;
-    SyscallResult kernel_inspection_after{0, true, 0};
-    if (succeeded(bridge) && post_rejection_control < 0)
-    {
-        report_checkpoint("first elevation begin");
-        first_elevation = request_kstuff_self_elevation();
-        report_checkpoint("first elevation end", first_elevation);
-        if (!succeeded(first_elevation))
-            stage = Stage::first_elevation;
-    }
-    if (succeeded(first_elevation))
+    std::uint64_t authority_after = 0;
+    int inspection_after_error = -1;
+    int repeated_elevation_error = -1;
+    if (elevation_error == 0)
     {
         report_checkpoint("repeated elevation begin");
-        repeated_elevation = request_kstuff_self_elevation();
-        report_checkpoint("repeated elevation end", repeated_elevation);
-        if (!succeeded(repeated_elevation) && stage == Stage::pass)
+        repeated_elevation_error = kstuff_request_profile(KSTUFF_PROFILE_DATA_ACCESS);
+        report_checkpoint("repeated elevation end", repeated_elevation_error);
+        if (repeated_elevation_error != 0 && stage == Stage::pass)
             stage = Stage::repeated_elevation;
         report_checkpoint("credentials begin");
         after = read_credentials();
@@ -446,11 +340,9 @@ int main()
         if (!has_root_identity(after) && stage == Stage::pass)
             stage = Stage::credentials;
         report_checkpoint("kernel inspection begin");
-        kernel_inspection_after = kstuff_request(self_inspection_operation, request_magic,
-                                                 request_version, auth_id_selector);
-        report_checkpoint("kernel inspection end", kernel_inspection_after);
-        if ((!inspected(kernel_inspection_after) ||
-             kernel_inspection_after.value != system_auth_id) &&
+        inspection_after_error = kstuff_get_authority_id(&authority_after);
+        report_checkpoint("kernel inspection end", inspection_after_error);
+        if ((inspection_after_error != 0 || authority_after != system_auth_id) &&
             stage == Stage::pass)
             stage = Stage::kernel_inspection_after;
         report_checkpoint("global read begin");
@@ -474,32 +366,20 @@ int main()
         receipt.data(), receipt.size(),
         "hello from the self-elevating sandbox app\n"
         "result=%s stage=%d pid=%d\n"
-        "sandbox_before=%08x sandbox_after_rejections=%08x\n"
-        "bridge=%s:%llu invalid_magic=%s:%llu invalid_version=%s:%llu invalid_profile=%s:%llu\n"
-        "first_elevation=%s:%llu repeated_elevation=%s:%llu\n"
+        "sandbox_before=%08x probe_error=%d\n"
+        "inspection_before_error=%d elevation_error=%d repeated_elevation_error=%d\n"
         "credentials_before=%d,%d,%d,%d credentials_after=%d,%d,%d,%d\n"
-        "kernel_auth_id_before=%s:%016llx after=%s:%016llx expected=%016llx\n"
+        "kernel_auth_id_before=%016llx after=%016llx inspection_after_error=%d expected=%016llx\n"
         "global_read=%d path=%s\n"
         "filesystem_lifecycle=%d "
         "operations=mkdir,create,write,chmod,stat,rename,read,unlink,rmdir\n"
         "kernel_memory_open_before=%08x,%08x after=%08x,%08x paths=%s,%s\n",
         stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), pid,
-        static_cast<std::uint32_t>(sandbox_control),
-        static_cast<std::uint32_t>(post_rejection_control), bridge.failed ? "err" : "ok",
-        static_cast<unsigned long long>(bridge.value), invalid_magic.failed ? "err" : "ok",
-        static_cast<unsigned long long>(invalid_magic.value), invalid_version.failed ? "err" : "ok",
-        static_cast<unsigned long long>(invalid_version.value),
-        invalid_profile.failed ? "err" : "ok",
-        static_cast<unsigned long long>(invalid_profile.value),
-        first_elevation.failed ? "err" : "ok",
-        static_cast<unsigned long long>(first_elevation.value),
-        repeated_elevation.failed ? "err" : "ok",
-        static_cast<unsigned long long>(repeated_elevation.value), before.uid, before.effective_uid,
-        before.gid, before.effective_gid, after.uid, after.effective_uid, after.gid,
-        after.effective_gid, kernel_inspection_before.failed ? "err" : "ok",
-        static_cast<unsigned long long>(kernel_inspection_before.value),
-        kernel_inspection_after.failed ? "err" : "ok",
-        static_cast<unsigned long long>(kernel_inspection_after.value),
+        static_cast<std::uint32_t>(sandbox_control), probe_error, inspection_before_error,
+        elevation_error, repeated_elevation_error, before.uid, before.effective_uid, before.gid,
+        before.effective_gid, after.uid, after.effective_uid, after.gid, after.effective_gid,
+        static_cast<unsigned long long>(authority_before),
+        static_cast<unsigned long long>(authority_after), inspection_after_error,
         static_cast<unsigned long long>(system_auth_id), global_read_result, system_library_path,
         filesystem_result, static_cast<std::uint32_t>(kernel_memory_before),
         static_cast<std::uint32_t>(physical_memory_before),
@@ -508,7 +388,7 @@ int main()
         physical_memory_path);
 
     int receipt_result = -1;
-    if (succeeded(first_elevation) && receipt_length > 0 &&
+    if (elevation_error == 0 && receipt_length > 0 &&
         static_cast<std::size_t>(receipt_length) < receipt.size())
     {
         receipt_result =

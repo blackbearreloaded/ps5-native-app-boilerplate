@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <kstuff.h>
 
 namespace
 {
@@ -27,16 +28,10 @@ constexpr char proc_status_path[] = "/data/g3-procfs-mount/curproc/status";
 constexpr char procfs_name[] = "procfs";
 constexpr char privileged_device_path[] = "/dev/mdctl";
 
-constexpr std::uint64_t getppid_syscall = 39;
 constexpr std::uint64_t mount_syscall = 21;
 constexpr std::uint64_t unmount_syscall = 22;
 constexpr std::uint64_t socket_syscall = 97;
 constexpr std::uint64_t forced_unmount = UINT64_C(0x00080000);
-constexpr std::uint32_t bridge_check_operation = UINT32_C(0xffffffff);
-constexpr std::uint32_t self_elevation_operation = 7;
-constexpr std::uint64_t request_magic = UINT64_C(0x31564c4553355350);
-constexpr std::uint64_t request_version = 1;
-constexpr std::uint64_t data_access_profile = 1;
 constexpr std::uint64_t address_family_inet = 2;
 constexpr std::uint64_t socket_type_raw = 3;
 constexpr std::uint64_t protocol_icmp = 1;
@@ -149,21 +144,9 @@ SyscallResult invoke_raw_syscall(std::uint64_t number, std::uint64_t argument0 =
     return {number, failed != 0, *error_location};
 }
 
-SyscallResult kstuff_request(std::uint32_t operation, std::uint64_t argument0,
-                             std::uint64_t argument1, std::uint64_t argument2) noexcept
-{
-    return invoke_raw_syscall((static_cast<std::uint64_t>(operation) << 32) | getppid_syscall,
-                              argument0, argument1, argument2);
-}
-
 [[nodiscard]] bool succeeded(const SyscallResult &result) noexcept
 {
     return !result.failed;
-}
-
-[[nodiscard]] bool kstuff_succeeded(const SyscallResult &result) noexcept
-{
-    return succeeded(result) && result.value == 0;
 }
 
 int open_device() noexcept
@@ -248,21 +231,18 @@ int main()
     const SyscallResult socket_before = open_raw_socket();
     Stage stage = Stage::pass;
 
-    const SyscallResult bridge =
-        kstuff_request(bridge_check_operation, request_magic, request_version, data_access_profile);
-    if (!kstuff_succeeded(bridge))
+    const int probe_error = kstuff_probe();
+    if (probe_error != 0)
         stage = Stage::bridge;
-    const SyscallResult elevation = stage == Stage::pass
-                                        ? kstuff_request(self_elevation_operation, request_magic,
-                                                         request_version, data_access_profile)
-                                        : SyscallResult{0, true, 0};
-    if (stage == Stage::pass && !kstuff_succeeded(elevation))
+    const int elevation_error =
+        stage == Stage::pass ? kstuff_request_profile(KSTUFF_PROFILE_DATA_ACCESS) : -1;
+    if (stage == Stage::pass && elevation_error != 0)
         stage = Stage::elevation;
 
     MountProbeResult mount{};
     int device_after = -1;
     SyscallResult socket_after{0, true, 0};
-    if (kstuff_succeeded(elevation))
+    if (elevation_error == 0)
     {
         mount = probe_mount();
         if ((!succeeded(mount.mounted) || !succeeded(mount.unmounted)) && stage == Stage::pass)
@@ -283,23 +263,21 @@ int main()
     const int receipt_length = std::snprintf(
         receipt.data(), receipt.size(),
         "result=%s stage=%d pid=%d\n"
-        "bridge=%s:%llu elevation=%s:%llu\n"
+        "probe_error=%d elevation_error=%d\n"
         "g3_mount=%s:%llu unmount=%s:%llu mkdir=%d proc_read=%d cleanup=%d "
         "path=%s type=%s\n"
         "g4_device_before=%08x after=%08x path=%s action=open-close-only\n"
         "g5_raw_socket_before=%s:%llu after=%s:%llu family=AF_INET type=SOCK_RAW "
         "protocol=ICMP transmitted=no\n",
-        stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), pid,
-        bridge.failed ? "err" : "ok", static_cast<unsigned long long>(bridge.value),
-        elevation.failed ? "err" : "ok", static_cast<unsigned long long>(elevation.value),
-        mount.mounted.failed ? "err" : "ok", static_cast<unsigned long long>(mount.mounted.value),
-        mount.unmounted.failed ? "err" : "ok",
+        stage == Stage::pass ? "PASS" : "FAIL", static_cast<int>(stage), pid, probe_error,
+        elevation_error, mount.mounted.failed ? "err" : "ok",
+        static_cast<unsigned long long>(mount.mounted.value), mount.unmounted.failed ? "err" : "ok",
         static_cast<unsigned long long>(mount.unmounted.value), mount.directory, mount.status_read,
         mount.cleanup, mount_path, procfs_name, static_cast<std::uint32_t>(device_before),
         static_cast<std::uint32_t>(device_after), privileged_device_path,
         socket_before.failed ? "err" : "ok", static_cast<unsigned long long>(socket_before.value),
         socket_after.failed ? "err" : "ok", static_cast<unsigned long long>(socket_after.value));
-    if (kstuff_succeeded(elevation) && receipt_length > 0 &&
+    if (elevation_error == 0 && receipt_length > 0 &&
         static_cast<std::size_t>(receipt_length) < receipt.size() &&
         write_receipt(receipt.data(), static_cast<std::size_t>(receipt_length)) != 0 &&
         stage == Stage::pass)
