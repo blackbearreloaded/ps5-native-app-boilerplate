@@ -1,29 +1,25 @@
-# Elevated-capability proof applications
+# Elevated-capability C++ examples
 
-These four small applications present the capabilities enabled by the proposed
-caller-only kstuff interface. Each title shows one plain-language PASS or FAIL
-notification and writes a detailed receipt under `/data` for independent
-verification.
+These source-only examples show how a native application uses the caller-only
+interface proposed in
+[blackbearreloaded/kstuff-lite#1](https://github.com/blackbearreloaded/kstuff-lite/pull/1).
+They are intentionally isolated from the boilerplate build, packaging, CI, and
+application metadata.
 
-| Title | Proof | Safe boundary | Receipt |
-| --- | --- | --- | --- |
-| Capability Proof: Data Access | Credential inspection, system-file read, and a complete `/data` file lifecycle | Inspects only its own authority and removes temporary files | `/data/self-elevation-validation.txt` |
-| Capability Proof: Process Memory | Platform `mdbg` read, write, verify, and restore | Targets only the supplied test helper and independently confirms restoration | `/data/g2-process-memory-result.txt` |
-| Capability Proof: System Access | procfs mount/read/unmount, privileged-device open/close, and raw-socket availability | Removes the mount, sends no device command, and transmits no packet | `/data/g3-g5-system-capabilities-result.txt` |
-| Capability Proof: Debugging | Platform `ptrace` attach, read, write, verify, restore, and detach | Targets only the supplied test helper | `/data/g6-ptrace-result.txt` |
+| Source | Demonstrated capability |
+| --- | --- |
+| [`self-elevation/src/main.cpp`](self-elevation/src/main.cpp) | Request profile 1, inspect the caller's authority, read a system file, and validate a reversible `/data` lifecycle |
+| [`process-memory/src/main.cpp`](process-memory/src/main.cpp) | Request profile 2 and use platform `mdbg` to read, replace, verify, and restore one owned helper sentinel |
+| [`system-capabilities/src/main.cpp`](system-capabilities/src/main.cpp) | Request profile 1, mount/read/unmount procfs, open/close `/dev/mdctl`, and probe raw-socket availability without transmitting |
+| [`ptrace/src/main.cpp`](ptrace/src/main.cpp) | Request profile 3 and use platform `ptrace` to attach, read, replace, verify, restore, and detach from the owned helper |
+| [`process-memory/helper/main.cpp`](process-memory/helper/main.cpp) | Publish an explicitly owned sentinel target and independently confirm that both memory probes restore it |
 
-Build the complete presentation set from the repository root:
+Every example keeps the elevated target bounded: kstuff operates only on its
+calling process, while process-memory and ptrace operations target only the
+supplied helper. Mutable values are restored, temporary mounts and files are
+removed, privileged devices receive no command, and the raw socket sends no
+traffic.
 
-```sh
-make capability-examples
-```
-
-The process-memory and debugging proofs share
-`process-memory/helper/g2-process-helper.elf`. Start a fresh helper through
-elfldr immediately before either proof. See
-[`docs/CAPABILITY_SUITE.md`](../docs/CAPABILITY_SUITE.md) for the exact console
-order, request ABI, hardware results, and limitations.
-
-The apps intentionally keep their on-screen output short. Their receipt files
-contain PIDs, raw syscall results, stage codes, before/after values, and cleanup
-status for detailed review.
+The complete suite passed on firmware 6.02. The original profile-1 data-access
+path also passed on firmware 12.70; the expanded profiles have not yet received
+the same 12.70 hardware coverage.

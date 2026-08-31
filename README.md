@@ -32,12 +32,6 @@ on 6.02 and 12.70; validate the exact artifact on other target environments
 before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
-An opt-in [elevated-capability suite](docs/CAPABILITY_SUITE.md) validates
-caller-only kstuff profiles for data access, owned process-memory operations,
-debugging, mounts, privileged-device access, networking, and bounded kernel
-credential inspection. It remains separate from the default sandboxed
-skeleton.
-
 ## What is included
 
 | Feature | Included implementation |
@@ -385,8 +379,6 @@ tests/                        Host-native C++ unit and tooling integration tests
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
-| [Self-elevation example](docs/SELF_ELEVATION.md) | Versioned kstuff request and `/data` acceptance test |
-| [Elevated-capability suite](docs/CAPABILITY_SUITE.md) | Build, ABI, bounded probes, run order, and hardware evidence |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |
 
@@ -406,7 +398,6 @@ tests/                        Host-native C++ unit and tooling integration tests
 | [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
-| [EchoStretch/kstuff-lite](https://github.com/EchoStretch/kstuff-lite) | Execution environment extended by the optional caller-only capability proposal |
 
 Exact dependency pins and license notes are recorded in [NOTICE.md](NOTICE.md).
 

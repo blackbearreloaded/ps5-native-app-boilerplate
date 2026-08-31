@@ -86,25 +86,6 @@ jobs:
           compression-level: 0
           retention-days: 14
 
-      - name: Build elevated-capability acceptance suite
-        if: github.event_name == 'pull_request' && hashFiles('examples/self-elevation/src/main.cpp') != ''
-        run: make capability-examples
-
-      - name: Upload elevated-capability acceptance suite
-        if: github.event_name == 'pull_request' && hashFiles('examples/self-elevation/src/main.cpp') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: elevated-capability-suite-${{ github.sha }}
-          path: |
-            dist/PPSA99792.ffpfsc
-            dist/PPSA99793.ffpfsc
-            dist/PPSA99794.ffpfsc
-            dist/PPSA99795.ffpfsc
-            examples/process-memory/helper/g2-process-helper.elf
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
   release:
     name: GitHub release
     if: github.ref_type == 'tag'

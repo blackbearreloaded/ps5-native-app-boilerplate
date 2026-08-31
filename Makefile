@@ -11,10 +11,6 @@ APP_DEFINITIONS ?=
 APP_INCLUDE_PATHS ?=
 APP_STATIC_ARCHIVES ?=
 APP_RUNTIME_MODULES ?=
-APP_SOURCE_DIR ?=
-APP_PARAM ?=
-APP_SCE_SYS ?=
-APP_ASSETS ?=
 PACBREW_PACKAGES ?=
 PACBREW_INCLUDE_PATHS ?=
 PACBREW_STATIC_ARCHIVES ?=
@@ -34,7 +30,6 @@ HOST_TEST_CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
 HOST_TEST_LDFLAGS ?= -Wl,--gc-sections
 GTEST_ARGS ?=
 export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
-export APP_SOURCE_DIR APP_PARAM APP_SCE_SYS APP_ASSETS
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
 export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
 export TITLE_ID APP_NAME APP_CATEGORY CONTENT_SUFFIX
@@ -45,7 +40,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh \
 	$(wildcard tooling/native/runtime/*.txt)
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages self-elevation-ffpfsc process-memory-ffpfsc system-capabilities-ffpfsc ptrace-ffpfsc process-memory-helper capability-examples deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -129,47 +124,6 @@ packages: $(RUNTIME)
 	@printf '%s\n' '==> [packages] Building the app folder and both package formats'
 	@bash tools/build.sh All
 
-self-elevation-ffpfsc: $(RUNTIME)
-	@printf '%s\n' '==> [capabilities] Building the self-elevation and kernel-inspection image'
-	@APP_SOURCE_DIR=examples/self-elevation/src \
-		APP_PARAM=examples/self-elevation/sce_sys/param.json \
-		APP_SCE_SYS=sce_sys APP_ASSETS= \
-		bash tools/build.sh Ffpfsc
-
-process-memory-ffpfsc: $(RUNTIME)
-	@printf '%s\n' '==> [capabilities] Building the owned process-memory image'
-	@APP_SOURCE_DIR=examples/process-memory/src \
-		APP_PARAM=examples/process-memory/sce_sys/param.json \
-		APP_SCE_SYS=sce_sys APP_ASSETS= \
-		bash tools/build.sh Ffpfsc
-
-system-capabilities-ffpfsc: $(RUNTIME)
-	@printf '%s\n' '==> [capabilities] Building the mount, device, and network image'
-	@APP_SOURCE_DIR=examples/system-capabilities/src \
-		APP_PARAM=examples/system-capabilities/sce_sys/param.json \
-		APP_SCE_SYS=sce_sys APP_ASSETS= \
-		bash tools/build.sh Ffpfsc
-
-ptrace-ffpfsc: $(RUNTIME)
-	@printf '%s\n' '==> [capabilities] Building the owned ptrace image'
-	@APP_SOURCE_DIR=examples/ptrace/src \
-		APP_PARAM=examples/ptrace/sce_sys/param.json \
-		APP_SCE_SYS=sce_sys APP_ASSETS= \
-		bash tools/build.sh Ffpfsc
-
-process-memory-helper:
-	@printf '%s\n' '==> [capabilities] Building the owned process-memory helper'
-	@bash tools/setup-native-dependencies.sh >/dev/null
-	@$(MAKE) -C examples/process-memory/helper \
-		PS5_PAYLOAD_SDK=$(abspath .deps/native/ps5-payload-sdk)
-
-capability-examples:
-	@$(MAKE) self-elevation-ffpfsc
-	@$(MAKE) process-memory-ffpfsc
-	@$(MAKE) system-capabilities-ffpfsc
-	@$(MAKE) ptrace-ffpfsc
-	@$(MAKE) process-memory-helper
-
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
@@ -227,12 +181,6 @@ help:
 	  'make ffpkg           Build the folder and UFS2 .ffpkg image' \
 	  'make ffpfsc          Build the folder and compressed .ffpfsc image' \
 	  'make packages        Build folder, .ffpkg, and .ffpfsc outputs' \
-	  'make capability-examples  Build every elevated-capability image and helper' \
-	  'make self-elevation-ffpfsc  Build the self-elevation/kernel-inspection image' \
-	  'make process-memory-ffpfsc  Build the owned process-memory image' \
-	  'make system-capabilities-ffpfsc  Build the mount/device/network image' \
-	  'make ptrace-ffpfsc  Build the owned ptrace image' \
-	  'make process-memory-helper  Build the shared owned-process helper ELF' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
 	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES' \
