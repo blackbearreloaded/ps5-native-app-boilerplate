@@ -26,8 +26,10 @@ removed, privileged devices receive no command, and the raw socket sends no
 traffic.
 
 The suite has been exercised on firmware 6.02 and 12.70. Profile 1, nullfs,
-privileged-device open/close, raw-socket creation, and bounded ptrace operations
-passed on both. Firmware 6.02 permits direct `mdbg` writes; firmware 12.70
-permits `mdbg` reads but requires the ptrace fallback for writes. These are
-capability demonstrations, not a recommendation that ordinary applications
-modify or trace other processes.
+privileged-device open/close, raw-socket creation, and the standalone bounded
+ptrace example passed on both. Firmware 6.02 permits direct `mdbg` writes;
+firmware 12.70 permits `mdbg` reads but returns `EPERM` for writes. The combined
+`mdbg`-to-ptrace fallback is retained as an experimental example and was
+compiled, but its final revision was not rerun on hardware. These are capability
+demonstrations, not a recommendation that ordinary applications modify or trace
+other processes.
