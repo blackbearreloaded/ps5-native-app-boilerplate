@@ -31,6 +31,7 @@ constexpr std::uint64_t replacement_value = UINT64_C(0xa55aa55a5aa55aa5);
 constexpr std::uint64_t wait4_syscall = 7;
 constexpr std::uint64_t ptrace_syscall = 26;
 constexpr std::uint64_t wait_no_hang = 1;
+constexpr std::uint64_t wait_untraced = 2;
 constexpr unsigned int trace_wait_attempts = 200;
 constexpr unsigned int trace_stop_event_limit = 4;
 constexpr std::uint32_t trace_wait_interval_microseconds = 10000;
@@ -215,7 +216,8 @@ bool wait_for_trace_stop(std::int32_t pid) noexcept
         int wait_status = 0;
         const SyscallResult waited =
             invoke_raw_syscall(wait4_syscall, static_cast<std::uint64_t>(pid),
-                               reinterpret_cast<std::uint64_t>(&wait_status), wait_no_hang, 0);
+                               reinterpret_cast<std::uint64_t>(&wait_status),
+                               wait_no_hang | wait_untraced, 0);
         if (!succeeded(waited))
             return false;
         if (waited.value == static_cast<std::uint64_t>(pid))
@@ -235,7 +237,8 @@ bool wait_for_trace_termination(std::int32_t pid) noexcept
         int wait_status = 0;
         const SyscallResult waited =
             invoke_raw_syscall(wait4_syscall, static_cast<std::uint64_t>(pid),
-                               reinterpret_cast<std::uint64_t>(&wait_status), wait_no_hang, 0);
+                               reinterpret_cast<std::uint64_t>(&wait_status),
+                               wait_no_hang | wait_untraced, 0);
         if (!succeeded(waited))
             return false;
         if (waited.value == static_cast<std::uint64_t>(pid))
