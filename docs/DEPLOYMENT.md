@@ -1,10 +1,10 @@
 # Deployment
 
 This project creates a directory-style homebrew application and optional
-filesystem images. Its Makefile can update the directory or upload an image
-below `/data/homebrew` over FTP. It does not configure the console, start
-payloads, register titles, launch applications, or create a signed retail
-package.
+filesystem images. Tagged releases also provide the complete directory as a
+ZIP archive. Its Makefile can update the directory or upload an image below
+`/data/homebrew` over FTP. It does not configure the console, start payloads,
+register titles, launch applications, or create a signed retail package.
 
 ## Requirements
 
@@ -136,6 +136,19 @@ and avoids replacing a package while its previous title remains active.
 Use `make packages` only when both optional image formats are needed. Rebuild
 the selected format immediately before deployment so an older package is not
 mistaken for the current application.
+
+## Deploy a tagged-release ZIP
+
+Tagged GitHub Releases include `<TITLE_ID>.zip` as a transport-friendly copy
+of the validated directory-style application. Extract it locally; the archive
+contains one top-level `<TITLE_ID>/` folder. Upload that complete folder so the
+result is `/data/homebrew/<TITLE_ID>/eboot.bin` with its `sce_sys/`,
+`sce_module/`, and asset directories beside it.
+
+Do not upload the ZIP file itself and do not extract only its contents directly
+into `/data/homebrew`. ShadowMountPlus consumes the extracted title folder, not
+the ZIP container. The extracted folder and the `.ffpfsc` release asset contain
+equivalent application content, so stage only one form for a given title ID.
 
 ## Smoke test
 

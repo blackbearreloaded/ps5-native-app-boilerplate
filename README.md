@@ -128,6 +128,11 @@ entire directory with a compatible loader such as
 [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus); `eboot.bin`
 cannot be deployed by itself.
 
+Tagged releases also provide `<TITLE_ID>.zip`. Extract it locally and upload
+the enclosed `<TITLE_ID>/` folder to `/data/homebrew`; do not upload the ZIP
+itself. This directory deployment contains the same application content as the
+release `.ffpfsc` image.
+
 For a short development loop, build and update the title folder under
 `/data/homebrew` through an already-running FTP service:
 
@@ -227,9 +232,9 @@ git push origin 01.002.003
 ```
 
 The workflow rejects a tag that differs from `contentVersion` and publishes
-the verified compressed FFPFSC image and its `SHA256SUMS` under that version.
-The image already
-contains the complete application and generated `libc.prx`. See [Application
+the verified compressed FFPFSC image, an equivalent directory ZIP, and their
+`SHA256SUMS` under that version. Both release forms contain the complete
+application and generated `libc.prx`. See [Application
 configuration](docs/CONFIGURATION.md) for every metadata field.
 
 The target uses C++20 with exceptions and RTTI disabled. Allocation-free
@@ -326,6 +331,7 @@ constraints and ready-made `.at9` handling are documented in
 | Output | Purpose |
 | --- | --- |
 | `dist/<TITLE_ID>/` | Complete directory-style application |
+| `dist/<TITLE_ID>.zip` | Tagged-CI archive of the directory-style application |
 | `dist/<TITLE_ID>.ffpkg` | Optional uncompressed UFS2 image |
 | `dist/<TITLE_ID>.ffpfsc` | Optional compressed PFS image |
 | `build/` | Generated compiler, linker, and validation intermediates |

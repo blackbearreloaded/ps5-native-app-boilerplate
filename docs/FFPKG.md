@@ -5,7 +5,8 @@ Every application or package build creates and validates
 `-OutputFormat` selections:
 
 All formats remain available for local development. Tagged GitHub Releases
-attach only the complete compressed `.ffpfsc` image and its `SHA256SUMS`.
+attach the complete compressed `.ffpfsc` image, a ZIP of the validated
+directory-style application, and their shared `SHA256SUMS`.
 
 | Make target / selection | Additional output | Packaging tool |
 | --- | --- | --- |
@@ -20,6 +21,10 @@ make ffpkg
 make ffpfsc
 make packages
 ```
+
+The release workflow uses Python's standard-library `zipfile` module to archive
+`dist/<TITLE_ID>/` as `<TITLE_ID>.zip`. The ZIP is a distribution convenience,
+not another console filesystem format; extract it before directory deployment.
 
 `-Ffpkg` remains accepted as a compatibility alias for
 `-OutputFormat Ffpkg` in the Windows PowerShell frontend.
