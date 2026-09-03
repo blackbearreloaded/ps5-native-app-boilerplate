@@ -1,35 +1,20 @@
-# Elevated-capability C++ examples
+# Minimal self-elevation example
 
-These source-only examples show how a native application uses the caller-only
-interface proposed in
-[blackbearreloaded/kstuff-lite#1](https://github.com/blackbearreloaded/kstuff-lite/pull/1).
-They are intentionally isolated from the boilerplate build, packaging, CI, and
-application metadata.
+[`self-elevation/src/main.cpp`](self-elevation/src/main.cpp) shows the complete application-side flow for the caller-only interface proposed in [blackbearreloaded/kstuff-lite#1](https://github.com/blackbearreloaded/kstuff-lite/pull/1). It requests the data-access profile, writes `/data/hello-from-sandbox.txt`, closes and reopens the file, and verifies that it contains `hello from the sandboxed app`.
 
-Add the kstuff-lite repository's `include/` directory to the application's
-include search path. The examples include `<kstuff.h>` and therefore do not
-duplicate operation numbers, magic values, ABI versions, or syscall transport.
+Add kstuff-lite's `include/` directory to the application include path, then include `<kstuff.h>`. The elevation-specific code is only:
 
-| Source | Demonstrated capability |
-| --- | --- |
-| [`self-elevation/src/main.cpp`](self-elevation/src/main.cpp) | Request profile 1, inspect the caller's authority, read a system file, validate a reversible `/data` lifecycle, and write/reopen/read/compare `/data/hello-from-sandbox.txt` |
-| [`process-memory/src/main.cpp`](process-memory/src/main.cpp) | Request profile 2 and read, replace, verify, and restore one owned helper sentinel; use a bounded ptrace fallback when firmware denies `mdbg` writes |
-| [`system-capabilities/src/main.cpp`](system-capabilities/src/main.cpp) | Request profile 1, mount/read/unmount a private nullfs view, open/close `/dev/mdctl`, and probe raw-socket availability without transmitting |
-| [`ptrace/src/main.cpp`](ptrace/src/main.cpp) | Request profile 3 and use platform `ptrace` to attach, read, replace, verify, restore, and terminate only the owned helper |
-| [`process-memory/helper/main.cpp`](process-memory/helper/main.cpp) | Publish an explicitly owned sentinel target and independently confirm that both memory probes restore it |
+```cpp
+int request_data_access()
+{
+    if (const int error = kstuff_probe(); error != 0)
+        return error;
+    return kstuff_request_profile(KSTUFF_PROFILE_DATA_ACCESS);
+}
+```
 
-Every example keeps the elevated target bounded: kstuff operates only on its
-calling process, while process-memory and ptrace operations target only the
-supplied helper. Mutable values are restored before the ptrace-based probes
-deterministically terminate their owned helper. Temporary mounts and files are
-removed, privileged devices receive no command, and the raw socket sends no
-traffic.
+`kstuff_probe()` verifies that a compatible request bridge is active. `kstuff_request_profile()` applies the named profile to the calling process and returns zero on success or a positive `errno` value on failure. The request affects only that process and lasts until it exits.
 
-The suite has been exercised on firmware 6.02 and 12.70. Profile 1, nullfs,
-privileged-device open/close, raw-socket creation, and the standalone bounded
-ptrace example passed on both. Firmware 6.02 permits direct `mdbg` writes;
-firmware 12.70 permits `mdbg` reads but returns `EPERM` for writes. The combined
-`mdbg`-to-ptrace fallback is retained as an experimental example and was
-compiled, but its final revision was not rerun on hardware. These are capability
-demonstrations, not a recommendation that ordinary applications modify or trace
-other processes.
+The example contains no raw syscall numbers, request operation numbers, ABI magic values, authority IDs, or firmware offsets. Those protocol details belong to kstuff-lite and are encapsulated by `<kstuff.h>`. `O_WRONLY`, `O_CREAT`, `O_TRUNC`, and `O_RDONLY` are standard file-open flags from `<fcntl.h>`; `0666` is the conventional file permission mode, not a kstuff value.
+
+The source intentionally demonstrates one ordinary application use case. The earlier process-memory, ptrace, mount, raw-socket, and privileged-device files were hardware-validation probes, not dependencies of self-elevation, and are deliberately excluded from this developer-facing example.
