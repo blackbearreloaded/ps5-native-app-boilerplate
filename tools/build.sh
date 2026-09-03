@@ -23,7 +23,29 @@ for command in python3 sha256sum; do
 done
 bash "$root/tools/setup-native-dependencies.sh" >/dev/null
 
-param="$root/sce_sys/param.json"
+app_source_dir=${APP_SOURCE_DIR:-src}
+app_param=${APP_PARAM:-sce_sys/param.json}
+app_sce_sys=${APP_SCE_SYS:-sce_sys}
+app_assets=${APP_ASSETS:-assets}
+for path in "$app_source_dir" "$app_param" "$app_sce_sys"; do
+    [[ $path =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]] || {
+        echo "invalid application input path: $path" >&2
+        exit 2
+    }
+done
+[[ -d $root/$app_source_dir && -f $root/$app_param && -d $root/$app_sce_sys ]] || {
+    echo "application source, metadata, or presentation directory is missing" >&2
+    exit 2
+}
+if [[ -n $app_assets ]]; then
+    [[ $app_assets =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ &&
+        -d $root/$app_assets ]] || {
+        echo "invalid application assets directory: $app_assets" >&2
+        exit 2
+    }
+fi
+
+param="$root/$app_param"
 title_id=$(python3 - "$param" <<'PY'
 import json, re, sys
 
@@ -74,7 +96,7 @@ module_sdk=0x02000009
 companion_sdk=0x08050001
 fself_magic=0x1D3D154F
 
-bash "$root/tools/validate-assets.sh" "$root/sce_sys"
+bash "$root/tools/validate-assets.sh" "$root/$app_sce_sys"
 
 sdk_root="$root/.deps/native/ps5-payload-sdk"
 zlib_root="$root/.deps/native/zlib/root"
@@ -97,7 +119,7 @@ mkdir -p "$build/host" "$build/obj" "$dist"
     "$zlib_archive" -o "$tool"
 
 mapfile -d '' -t source_paths < <(
-    find "$root/src" -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
+    find "$root/$app_source_dir" -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
         -print0 | sort -z
 )
 sources=()
@@ -151,7 +173,8 @@ fi
 
 objects=()
 for source in "${sources[@]}"; do
-    [[ $source =~ ^src/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
+    [[ $source =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*\.(c|cc|cpp)$ &&
+        -f $root/$source ]] || {
         echo "invalid source: $source" >&2; exit 2;
     }
     object="$build/obj/${source//\//_}.o"
@@ -212,9 +235,19 @@ mkdir -p "$app/sce_sys" "$app/sce_module"
 
 cp "$param" "$app/sce_sys/param.json"
 for asset in icon0.png pic0.dds pic1.dds snd0.at9; do
-    [[ -f $root/sce_sys/$asset ]] && cp "$root/sce_sys/$asset" "$app/sce_sys/$asset"
+    [[ -f $root/$app_sce_sys/$asset ]] && cp "$root/$app_sce_sys/$asset" "$app/sce_sys/$asset"
 done
-[[ ! -d $root/assets ]] || cp -a "$root/assets" "$app/assets"
+[[ -z $app_assets ]] || cp -a "$root/$app_assets" "$app/assets"
+
+root_files=()
+[[ -z ${APP_ROOT_FILES:-} ]] || read -r -a root_files <<< "$APP_ROOT_FILES"
+for source in "${root_files[@]}"; do
+    [[ $source =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ && -f $root/$source ]] || {
+        echo "invalid application root file: $source" >&2
+        exit 2
+    }
+    cp "$root/$source" "$app/${source##*/}"
+done
 
 [[ -f $root/runtime/libc.prx ]] || bash "$root/tools/rebuild-libc.sh"
 (cd "$root/runtime" && sha256sum --check --strict libc.prx.sha256)
