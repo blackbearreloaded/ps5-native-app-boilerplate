@@ -93,6 +93,20 @@ ps5-native-tool self --inspect --file <module>
 `link` expects the repository linker script’s page-separated PIE. The normal
 build invokes it correctly; the command is documented for debugging and CI.
 
+### RELRO and 16 KiB `PT_LOAD` congruence
+
+Every mapped load segment must satisfy
+`p_offset % 0x4000 == p_vaddr % 0x4000`. The RELRO segment begins at
+`.data.rel.ro`; `.got` is contained inside that region and must not be used as
+its file origin. Using the GOT offset can appear to work for a small program,
+then produce a loader rejection after adding imports or static data because the
+section layout changes.
+
+The converter anchors RELRO to `.data.rel.ro` and fails the host build if any
+mapped `PT_LOAD` violates the 16 KiB congruence rule. This validation belongs in
+the writer rather than in application code because the failure occurs before
+`main()` and is independent of the imported API's runtime behavior.
+
 ## Current hardware-validation baseline
 
 A clean build of the current C++20 graphical Hello World was deployed with

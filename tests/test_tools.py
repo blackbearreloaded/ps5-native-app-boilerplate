@@ -159,6 +159,19 @@ class ToolTests(unittest.TestCase):
             self.assertIn("/data/homebrew/PPSA12345.ffpkg", result.stdout)
             self.assertIn("no network request was sent", result.stdout)
 
+    def test_native_writer_anchors_relro_and_checks_load_congruence(self):
+        source = (ROOT / "tooling/native/sce_module_writer.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('section(image, ".data.rel.ro")', source)
+        self.assertIn("relro_source.address == relro_start", source)
+        self.assertIn("relro_source.file_offset", source)
+        self.assertIn(
+            "header.offset % header.alignment == header.address % header.alignment",
+            source,
+        )
+        self.assertNotIn("const std::uint64_t relro_file = got.file_offset", source)
+
 
 if __name__ == "__main__":
     unittest.main()
