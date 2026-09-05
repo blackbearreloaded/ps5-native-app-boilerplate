@@ -51,6 +51,25 @@ imports must exist in the public SDK stubs under
 `.deps/native/ps5-payload-sdk/target/lib`. Do not silence unresolved symbols;
 update the SDK or provide a legitimate native implementation.
 
+## The title stops launching after adding imports or static data
+
+Symptom: a smaller fSELF launches, but a larger build is rejected before
+`main()` even though every imported NID exists on the target firmware. On an
+observed firmware 12.02 folder deployment this presented as launch result
+`0x80aa001a`.
+
+Check every mapped `PT_LOAD` in the generated `eboot.elf`: its file offset and
+virtual address must have the same residue modulo `0x4000`. In particular,
+RELRO starts at `.data.rel.ro`, not `.got`. An older writer used the GOT file
+offset and could silently generate an incongruent segment when the binary
+layout changed.
+
+Current tooling anchors the RELRO file offset to `.data.rel.ro` and rejects an
+incongruent load during the host build. Rebuild `ps5-native-tool` after updating
+`tooling/native/sce_module_writer.cpp`; reusing an older binary preserves the
+bug even when the source is fixed. This issue concerns ELF layout, not network
+permissions or the correctness of a particular import.
+
 ## Native dependency bootstrap fails
 
 The first build needs network access to download the hash-pinned public PS5
