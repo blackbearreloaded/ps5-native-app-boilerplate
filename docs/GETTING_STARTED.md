@@ -11,7 +11,7 @@ Install the compiler, linker, Make, Python, and download/archive tools:
 
 ```bash
 sudo apt update
-sudo apt install clang-18 clang-format-18 clang-tidy-18 curl git lld-18 make \
+sudo apt install clang-18 clang-format-18 clang-tidy-18 curl git lld-18 make ninja-build ccache \
   pkg-config python3 python3-pip python3-venv tar unzip wget
 ```
 
