@@ -1,4 +1,21 @@
-# Notices
+# Third-party notices
+
+## Credits and acknowledgements
+
+| Project | Role |
+| --- | --- |
+| [ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk) | Public PS5 headers, libc++ headers, sysroot, and Clang target support |
+| [ps5-payload-dev/pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo) | Optional prebuilt PS5 ports and static libraries |
+| [SvenGDK/SharpProspero](https://github.com/SvenGDK/SharpProspero) | Public format reference used during initial research; not a build dependency |
+| [SvenGDK/UFS2Tool](https://github.com/SvenGDK/UFS2Tool) | Optional UFS2 `.ffpkg` generation |
+| [PSBrew/MkPFS](https://github.com/PSBrew/MkPFS) | Optional compressed `.ffpfsc` generation |
+| [sinajet/PSFFPKG](https://github.com/sinajet/PSFFPKG) | Public `.ffpkg` procedure used as a format reference |
+| [LLVM/Clang](https://github.com/llvm/llvm-project) | Native compiler |
+| [GoogleTest](https://github.com/google/googletest) | Pinned host-only C++ unit-test framework |
+| [zlib](https://zlib.net/) | Pinned source-built compression library used by the host FSELF tool |
+| [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
+| [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
+| [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
 
 ## Native build dependencies
 
