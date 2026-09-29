@@ -14,6 +14,12 @@
 namespace
 {
 constexpr char canary_path[] = "/data/hello-from-sandbox.txt";
+constexpr char poc_path[] = "/data/PPSA99790-poc.txt";
+#ifndef POC_RUN_TAG
+#define POC_RUN_TAG poc_run
+#endif
+#define POC_STR2(x) #x
+#define POC_STR(x) POC_STR2(x)
 
 struct NotificationRequest
 {
@@ -82,6 +88,30 @@ bool verify_canary(int before_open) noexcept
            sceKernelRead(input.get(), actual.data(), static_cast<std::size_t>(length)) == length &&
            std::memcmp(actual.data(), expected.data(), static_cast<std::size_t>(length)) == 0;
 }
+// PoC on top of the example: write a distinctively-named /data file with a
+// build-embedded run tag, then read it back and byte-compare. Independent of
+// the canary so the run can be confirmed off-console over FTP afterwards.
+bool write_poc_marker() noexcept
+{
+    std::array<char, 160> expected{};
+    std::array<char, 160> actual{};
+    const int length = std::snprintf(expected.data(), expected.size(),
+                                     "PPSA99790 sandbox-elevation PoC\n"
+                                     "tag=%s pid=%d\n",
+                                     POC_STR(POC_RUN_TAG), getpid());
+    if (length <= 0 || static_cast<std::size_t>(length) >= expected.size())
+        return false;
+    {
+        KernelFile output{sceKernelOpen(poc_path, O_WRONLY | O_CREAT | O_TRUNC, 0666)};
+        if (output.get() < 0 || sceKernelWrite(output.get(), expected.data(),
+                                               static_cast<std::size_t>(length)) != length)
+            return false;
+    }
+    KernelFile input{sceKernelOpen(poc_path, O_RDONLY, 0)};
+    return input.get() >= 0 &&
+           sceKernelRead(input.get(), actual.data(), static_cast<std::size_t>(length)) == length &&
+           std::memcmp(actual.data(), expected.data(), static_cast<std::size_t>(length)) == 0;
+}
 } // namespace
 
 int main()
@@ -96,8 +126,14 @@ int main()
 
     const auto result = elevation::request(elevation::Capability::filesystem);
     if (result == elevation::Status::ok)
-        report(verify_canary(before_open) ? "ELEVATION: filesystem granted; write/read verified"
-                                          : "ELEVATION: granted, but file verification failed");
+    {
+        const bool canary_ok = verify_canary(before_open);
+        const bool poc_ok = write_poc_marker();
+        report(canary_ok && poc_ok
+                   ? "ELEVATION: filesystem granted; canary + PoC write/read verified"
+                   : (canary_ok ? "ELEVATION: granted; canary ok but PoC file failed"
+                                : "ELEVATION: granted, but file verification failed"));
+    }
     else
     {
         std::array<char, 128> message{};
