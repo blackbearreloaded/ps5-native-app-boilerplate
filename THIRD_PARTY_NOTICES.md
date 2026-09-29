@@ -6,7 +6,7 @@
 | --- | --- |
 | [ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk) | Public PS5 headers, libc++ headers, sysroot, and Clang target support |
 | [ps5-payload-dev/pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo) | Optional prebuilt PS5 ports and static libraries |
-| [SvenGDK/SharpProspero](https://github.com/SvenGDK/SharpProspero) | Public format reference used during initial research; not a build dependency |
+| [SvenGDK/SharpProspero](https://github.com/SvenGDK/SharpProspero) | Source of the ELF converter and FSELF writer in `tooling/native/` (GPL-3.0) |
 | [SvenGDK/UFS2Tool](https://github.com/SvenGDK/UFS2Tool) | Optional UFS2 `.ffpkg` generation |
 | [PSBrew/MkPFS](https://github.com/PSBrew/MkPFS) | Optional compressed `.ffpfsc` generation |
 | [sinajet/PSFFPKG](https://github.com/sinajet/PSFFPKG) | Public `.ffpkg` procedure used as a format reference |
@@ -34,9 +34,9 @@ SDK. Those headers retain the Apache-2.0 WITH LLVM-exception license recorded
 upstream. The application does not redistribute or dynamically load the
 complete libc++ or libc++abi archives.
 
-The project’s PS5 ELF converter and FSELF writer are independently authored
-GPL-3.0-or-later code. SharpProspero was a useful public format reference during
-development but is not fetched, copied, linked, or required by the build.
+The PS5 ELF converter and FSELF writer in `tooling/native/` are derived from
+[SharpProspero](https://github.com/SvenGDK/SharpProspero), Copyright (C) 2026
+SvenGDK, GPL-3.0, and were translated to C++ and modified by BlackBearReloaded.
 
 ## Host test dependency
 
