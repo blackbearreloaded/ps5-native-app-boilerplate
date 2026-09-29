@@ -27,7 +27,8 @@ gtest=$(bash "$root/tools/setup-test-dependencies.sh")
 mapfile -d '' test_sources < <(find "$root/tests" -maxdepth 1 -type f -name '*.cpp' -print0)
 if (( ${#test_sources[@]} )); then
     "$tidy" "${test_sources[@]}" --quiet --warnings-as-errors='*' -- \
-        -std=c++20 -I"$root/src" -isystem "$gtest/googletest/include"
+        -std=c++20 -I"$root/src" -isystem "$gtest/googletest/include" \
+        -idirafter "$sdk/target/include"
 fi
 
 mapfile -d '' app_c_sources < <(find "$root/src" -type f -name '*.c' -print0)

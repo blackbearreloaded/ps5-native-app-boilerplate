@@ -32,10 +32,11 @@ on 6.02 and 12.70; validate the exact artifact on other target environments
 before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
-An opt-in [sandbox-elevation proof](docs/SANDBOX_ELEVATION.md) demonstrates a
-native app submitting an exact-title helper to an already-running loopback
-elfldr and verifying one write under `/data`. It is intentionally separate
-from the default sandboxed skeleton.
+An opt-in [elevation protocol example](docs/SANDBOX_ELEVATION.md) submits a
+bundled helper to an already-running loopback elfldr, requests the filesystem
+capability, and verifies a write under `/data` after an explicit success reply.
+The versioned protocol currently supports only filesystem access and documents
+how to add capabilities. It is separate from the default sandboxed skeleton.
 
 ## What is included
 
@@ -384,7 +385,7 @@ tests/                        Host-native C++ unit and tooling integration tests
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
-| [Sandbox elevation proof](docs/SANDBOX_ELEVATION.md) | Opt-in exact-title elfldr example and `/data` canary validation |
+| [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |
 

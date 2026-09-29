@@ -60,7 +60,16 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: test-unit test-integration
+test: test-unit test-integration test-elevation
+
+.PHONY: test-elevation
+test-elevation:
+	@bash tools/setup-native-dependencies.sh >/dev/null
+	@mkdir -p build/tests
+	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -idirafter .deps/native/ps5-payload-sdk/target/include \
+		tests/test_elevation.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_elevation
+	@build/tests/test_elevation
+	@printf '%s\n' 'Elevation protocol and rollback checks passed.'
 
 test-deps:
 	@printf '%s\n' '==> [test-deps] Fetching the pinned host-only GoogleTest source'
@@ -137,6 +146,7 @@ sandbox-elevation-helper:
 	@$(MAKE) -C examples/sandbox-elevation/payload \
 		PS5_PAYLOAD_SDK="$(abspath .deps/native/ps5-payload-sdk)" \
 		OUTPUT="$(abspath $(SANDBOX_ELEVATION_HELPER))"
+	@python3 tools/validate-elevation-helper.py "$(SANDBOX_ELEVATION_HELPER)"
 
 sandbox-elevation-ffpfsc: $(RUNTIME) sandbox-elevation-helper
 	@printf '%s\n' '==> [sandbox-elevation] Building the self-elevating proof image'

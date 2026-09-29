@@ -63,6 +63,12 @@ jobs:
       - name: Run host integration tests
         run: make test-integration
 
+      - name: Check elevation protocol and rollback
+        run: make test-elevation
+
+      - name: Build filesystem capability example
+        run: make sandbox-elevation-ffpfsc
+
       - name: Reproduce clean-room runtime shim
         run: make libc
 

@@ -16,7 +16,7 @@ LDFLAGS := -Wl,--build-id=none
 
 all: $(OUTPUT)
 
-$(OUTPUT): main.cpp
+$(OUTPUT): main.cpp ../protocol.hpp
 	@mkdir -p -- $(@D)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
 
