@@ -46,11 +46,18 @@ payload environment, and the helper is not an arbitrary-process service.
    filesystem roots, then reads every changed field back. Failed updates trigger
    restoration and verification of the original values.
 6. The helper sends one terminal `response` and exits. Only `Status::ok` lets the
-   example write, close, reopen, and byte-verify `/data/hello-from-sandbox.txt`.
+   example write, close, reopen, and byte-verify `/data/hello-from-sandbox.txt`
+   and `/data/PPSA99790-poc.txt`. These two example files are overwritten on each
+   successful run; the second includes a build tag and the application PID.
 
-There is one capability request per helper invocation. No additional listener,
-daemon, JSON parser, or runtime registration mechanism is needed. Diagnostics go
-to klog; stdout carries protocol bytes only. Each socket operation has a timeout,
+There is one capability request per helper invocation. The helper exits after
+the response. The example calls the API once at startup; each additional API call
+launches another helper. Elevation remains with the app
+process until it exits, so no helper needs to wait for app closure.
+
+No additional listener, daemon, JSON parser, or runtime registration mechanism is
+needed. Diagnostics go to klog; stdout carries protocol bytes only.
+Each socket operation has a timeout,
 defaulting to five seconds. Tune `wire::io_timeout_us` in `protocol.hpp` and rebuild
 both endpoints for slower hardware. Partial transfers are handled; EOF, timeout,
 or interruption ends the attempt. There is no automatic resubmission.
@@ -143,8 +150,14 @@ The image is `dist/PPSA99790.ffpfsc`. CI checks the host protocol/rollback regre
 and builds the example. Host tests mock native calls and inject partial writes;
 they cannot establish PS5 runtime compatibility.
 
-The earlier, one-way proof was hardware-validated on firmware 6.02. **This versioned
-exchange, socket timeouts, and native credential-preparation path still require a
-fresh hardware run.** That run must verify the final reply, the application's exact
-file contents, normal title closure, and continued service health. Elevation belongs
-to the running process; the canary file remains after it exits.
+The maintainer reported successful console tests of this versioned implementation
+on firmware **6.02 and 12.70** on 2026-09-29, using the existing elfldr-based setup.
+Exact loader versions were not recorded here; these results do not establish
+compatibility with every loader or firmware combination.
+
+For future hardware regressions, check the success notification, both files' exact
+contents and current PID, normal title closure, and continued loader service health.
+The proof marker defaults to `tag=poc_run`; use
+`make sandbox-elevation-ffpfsc APP_DEFINITIONS=POC_RUN_TAG=my_run` to distinguish a
+new build from a previous run. Files remain after the app exits; their existence
+alone does not prove the latest request succeeded.

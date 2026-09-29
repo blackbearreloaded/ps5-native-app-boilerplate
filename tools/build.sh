@@ -26,7 +26,7 @@ bash "$root/tools/setup-native-dependencies.sh" >/dev/null
 app_source_dir=${APP_SOURCE_DIR:-src}
 app_param=${APP_PARAM:-sce_sys/param.json}
 app_sce_sys=${APP_SCE_SYS:-sce_sys}
-app_assets=${APP_ASSETS:-assets}
+app_assets=${APP_ASSETS-assets}
 for path in "$app_source_dir" "$app_param" "$app_sce_sys"; do
     [[ $path =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]] || {
         echo "invalid application input path: $path" >&2

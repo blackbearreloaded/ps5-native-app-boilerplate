@@ -120,8 +120,12 @@ extern "C"
         ++test::closes;
         return 0;
     }
-    int sceNetConnect(int, const void *, std::uint32_t)
+    int sceNetConnect(int, const void *address, std::uint32_t length)
     {
+        assert(length == sizeof(NetSockaddrIn));
+        const auto &endpoint = *static_cast<const NetSockaddrIn *>(address);
+        assert(endpoint.length == length && endpoint.family == 2);
+        assert(endpoint.address == 0x0100007f && endpoint.port == 0x3d23); // 127.0.0.1:9021
         return 0;
     }
     int sceNetSetsockopt(int, int, int, const void *, std::uint32_t)
@@ -204,6 +208,54 @@ int main()
     ++wrong_pid.pid;
     test::reset_client(wrong_pid, response);
     assert(elevation::request(Capability::filesystem) == Status::protocol_error);
+    assert(test::prepare_calls == 0 && test::closes == 2);
+    // Reject malformed headers, unknown values, and success before preparation.
+    for (int field = 0; field < 7; ++field)
+    {
+        auto bad = prepare;
+        switch (field)
+        {
+        case 0:
+            bad.magic = 0;
+            break;
+        case 1:
+            bad.version = 2;
+            break;
+        case 2:
+            bad.size = 25;
+            break;
+        case 3:
+            bad.kind = static_cast<Kind>(99);
+            break;
+        case 4:
+            bad.capability = static_cast<Capability>(2);
+            break;
+        case 5:
+            bad.status = static_cast<Status>(99);
+            break;
+        case 6:
+            bad.kind = Kind::response;
+            break;
+        }
+        test::reset_client(bad, response);
+        assert(elevation::request(Capability::filesystem) == Status::protocol_error);
+        assert(test::prepare_calls == 0 && test::closes == 2);
+    }
+    auto wrong_response = response;
+    ++wrong_response.pid;
+    test::reset_client(prepare, wrong_response);
+    assert(elevation::request(Capability::filesystem) == Status::protocol_error);
+    assert(test::prepare_calls == 1 && test::closes == 2);
+    test::reset_client(prepare, response);
+    test::replies.resize(2 * sizeof(Message) - 1);
+    assert(elevation::request(Capability::filesystem) == Status::transport_error);
+    assert(test::prepare_calls == 1 && test::closes == 2);
+    auto rejected = response;
+    rejected.status = Status::target_mismatch;
+    test::reset_client(rejected, response);
+    assert(elevation::request(Capability::filesystem) == Status::target_mismatch);
+    assert(test::prepare_calls == 0 && test::closes == 2);
+    assert(elevation::request(Capability::filesystem, nullptr) == Status::invalid_request);
     response.status = Status::apply_failed;
     test::reset_client(prepare, response);
     assert(elevation::request(Capability::filesystem) == Status::apply_failed);
