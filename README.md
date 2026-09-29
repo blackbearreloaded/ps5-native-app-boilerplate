@@ -411,6 +411,8 @@ tests/                        Host-native C++ unit and tooling integration tests
 
 ## External projects and tools
 
+Built with the [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk) by John Törnblom (ps5-payload-dev).
+
 | Project | Role |
 | --- | --- |
 | [ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk) | Public PS5 headers, libc++ headers, sysroot, and Clang target support |
