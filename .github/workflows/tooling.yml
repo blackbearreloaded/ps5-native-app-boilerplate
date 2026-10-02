@@ -104,7 +104,7 @@ jobs:
       - name: Build update-check example
         run: |
           make update-check-example
-          test -f dist/PPSA99791/assets/targets.txt
+          test -f dist/PPSA99780/assets/targets.txt
 
       - name: Reproduce clean-room runtime shim
         run: make libc

@@ -89,7 +89,7 @@ has an HTTP client, and is what the tests use.
 
 ## The example title
 
-`make update-check-example` builds `dist/PPSA99791/`, a title with no
+`make update-check-example` builds `dist/PPSA99780/`, a title with no
 interface that checks itself and the titles in
 [`examples/update-check/assets/targets.txt`](../examples/update-check/assets/targets.txt),
 then reports each answer three ways:
