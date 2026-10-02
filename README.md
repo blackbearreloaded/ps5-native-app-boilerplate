@@ -354,7 +354,15 @@ export/import path for data that must survive title removal or cache clearing.
 
 **Keep everything the home screen shows in `sce_sys/`, under these exact
 names, committed to your repository.** This is the layout the build packages,
-the console reads, and catalogs look for:
+the console reads, and catalogs look for.
+
+> [!IMPORTANT]
+> This structure is what makes an app conformant with the
+> [ps5-homebrew-catalog](https://github.com/blackbearreloaded/ps5-homebrew-catalog), the catalog behind
+> [homebrew.page](https://homebrew.page). Its automation finds your app, takes
+> its icon and reads its release version from these files at these paths.
+> Follow it and your app can be listed and updated automatically; deviate and
+> it has to be listed by hand and never shows updates to users.
 
 | File | What it is | Format | Needed |
 | --- | --- | --- | --- |
@@ -369,12 +377,15 @@ Why standardize on it:
 - **The build copies exactly these names** from `sce_sys/` into the app, and
   `make assets-check` validates their formats. A file under another name or in
   another folder is not packaged.
-- **Catalogs read them from your repository.** The
-  [homebrew.page](https://homebrew.page) catalog takes your icon and your
-  release's `contentVersion` from `sce_sys/icon0.png` and
+- **The ps5-homebrew-catalog reads them from your repository.** It takes your
+  icon and your release's `contentVersion` from `sce_sys/icon0.png` and
   `sce_sys/param.json` at the release tag, without downloading your release.
   An app that keeps them elsewhere, or generates them only at build time, has
-  to be listed by hand and can't show updates.
+  to be listed by hand and can't show updates. The catalog's
+  [submission guide](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/submitting.md) and
+  [App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md) pages say what else
+  it expects: a GitHub release tagged with the version, and a `contentVersion`
+  raised in every release.
 - **Anyone can find them.** Developers, tools and reviewers look in one place.
 
 Keep app content (textures, sounds, data the app loads itself) in `assets/`,

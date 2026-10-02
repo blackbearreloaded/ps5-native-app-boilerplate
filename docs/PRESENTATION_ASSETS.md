@@ -19,8 +19,11 @@ committed to your repository:
 | `sce_sys/snd0.at9` | The music while the app is selected | 48 kHz ATRAC9 in RIFF, at most 2 MiB | Optional |
 | `sce_sys/background-source.png`, `launch-background-source.png` | Nothing: the editable sources of the two backgrounds | PNG | Optional; never deployed |
 
-This is a recommendation for every app, not only for apps built from this
-template:
+Following this layout is what makes an app conformant with the
+[ps5-homebrew-catalog](https://github.com/blackbearreloaded/ps5-homebrew-catalog), the catalog behind
+[homebrew.page](https://homebrew.page): its automation looks for these files
+at these paths. It is a recommendation for every app, not only for apps built
+from this template:
 
 - The build packages exactly these names from `sce_sys/`; the validator checks
   their formats; the tools in this document write them there.
