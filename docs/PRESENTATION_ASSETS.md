@@ -4,6 +4,40 @@ This repository can turn ordinary developer-owned artwork and audio into the
 launcher formats supported by this template. Conversion changes only the
 repository's `sce_sys` files; it does not connect to or configure a console.
 
+## The standard layout
+
+Everything the console's home screen shows for a title lives in the app's
+`sce_sys/` folder under fixed names. Keep these files there, with these names,
+committed to your repository:
+
+| File | Shown | Format | Needed |
+| --- | --- | --- | --- |
+| `sce_sys/param.json` | The title's name; also its title ID and release version | JSON | Yes |
+| `sce_sys/icon0.png` | The home-screen tile | 512x512 PNG | Yes |
+| `sce_sys/pic0.dds` | The background while the app is selected | 3840x2160 BC7 DX10 DDS, no mipmaps | Optional; supply both or neither |
+| `sce_sys/pic1.dds` | The background while the app launches | 3840x2160 BC7 DX10 DDS, no mipmaps | Optional; supply both or neither |
+| `sce_sys/snd0.at9` | The music while the app is selected | 48 kHz ATRAC9 in RIFF, at most 2 MiB | Optional |
+| `sce_sys/background-source.png`, `launch-background-source.png` | Nothing: the editable sources of the two backgrounds | PNG | Optional; never deployed |
+
+This is a recommendation for every app, not only for apps built from this
+template:
+
+- The build packages exactly these names from `sce_sys/`; the validator checks
+  their formats; the tools in this document write them there.
+- Committing them, rather than producing them only during a build, lets
+  catalogs and stores read them straight from the repository at a release
+  tag. The [homebrew.page](https://homebrew.page) catalog reads
+  `sce_sys/icon0.png` for the listing's icon and `contentVersion` from
+  `sce_sys/param.json` to tell consoles when an update exists; it never
+  downloads the release to find them.
+- Files the app loads itself belong in `assets/` (mounted at `/app0/assets/`),
+  not in `sce_sys/`.
+- In a repository that holds more than the app, keep the same layout inside
+  the app's folder (`<app>/sce_sys/`).
+
+The two DDS backgrounds are about 8.3 MB each. They change rarely; commit them
+like any other source file.
+
 ## What you can customize
 
 | Experience | Source to provide | Generated console file |

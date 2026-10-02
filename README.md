@@ -352,6 +352,37 @@ export/import path for data that must survive title removal or cache clearing.
 
 ### Presentation assets
 
+**Keep everything the home screen shows in `sce_sys/`, under these exact
+names, committed to your repository.** This is the layout the build packages,
+the console reads, and catalogs look for:
+
+| File | What it is | Format | Needed |
+| --- | --- | --- | --- |
+| `sce_sys/param.json` | Title ID, name, and release version (`contentVersion`) | JSON | Yes |
+| `sce_sys/icon0.png` | Home-screen tile | 512x512 PNG | Yes |
+| `sce_sys/pic0.dds` | Background while the app is selected | 3840x2160 BC7 DDS | Optional, with `pic1.dds` |
+| `sce_sys/pic1.dds` | Background while the app launches | 3840x2160 BC7 DDS | Optional, with `pic0.dds` |
+| `sce_sys/snd0.at9` | Music while the app is selected | 48 kHz ATRAC9, at most 2 MiB | Optional |
+
+Why standardize on it:
+
+- **The build copies exactly these names** from `sce_sys/` into the app, and
+  `make assets-check` validates their formats. A file under another name or in
+  another folder is not packaged.
+- **Catalogs read them from your repository.** The
+  [homebrew.page](https://homebrew.page) catalog takes your icon and your
+  release's `contentVersion` from `sce_sys/icon0.png` and
+  `sce_sys/param.json` at the release tag, without downloading your release.
+  An app that keeps them elsewhere, or generates them only at build time, has
+  to be listed by hand and can't show updates.
+- **Anyone can find them.** Developers, tools and reviewers look in one place.
+
+Keep app content (textures, sounds, data the app loads itself) in `assets/`,
+not in `sce_sys/`. The editable sources of the backgrounds may stay beside
+them as `background-source.png` and `launch-background-source.png`; they are
+not deployed. If your app lives in a subfolder of a larger repository, keep
+the same layout inside that folder: `<app>/sce_sys/`.
+
 Replace the icon and background with one command:
 
 ```powershell
