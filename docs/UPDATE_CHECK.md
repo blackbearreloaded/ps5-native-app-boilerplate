@@ -133,5 +133,33 @@ catalog; the example title does that.
 
 ## Console validation
 
-Not yet run on hardware. This section records the first run: firmware, the
-exact build, each line the title printed, and how the title ended.
+Run once on a PS5 on 2026-10-02 (the example title built with
+`UPDATE_CHECK_RUN_TAG=c2 UPDATE_CHECK_EXIT_AFTER=60`, `eboot.bin` SHA-256
+`ab1dde8bec0fde046bcd26ec0a0dc02d2ecccbde6eaa8fe00c1017594ae6a1fe`), installed as a folder under `/data/homebrew` and registered by
+ShadowMountPlus. The console's firmware version wasn't recorded in this run.
+
+All five requests were answered over HTTPS with certificate verification on,
+through the title's own sandbox with no elevation:
+
+```text
+UPDATE-CHECK: start tag=c2 host=homebrew.page
+UPDATE-CHECK: self installed=01.000.000 state=unknown reason=not-listed http=404 error=0x00000000 available=- version=- page=- ms=154
+UPDATE-CHECK: PPSA99002 installed=01.000.000 state=update-available reason=ok http=200 error=0x00000000 available=01.000.070 version=01.000.070 page=https://homebrew.page/app/PPSA99002/ ms=109
+UPDATE-CHECK: PPSA99002 installed=99.999.999 state=up-to-date reason=ok http=200 error=0x00000000 available=01.000.070 version=01.000.070 page=https://homebrew.page/app/PPSA99002/ ms=94
+UPDATE-CHECK: PPSA99009 installed=01.000.000 state=unknown reason=not-available http=200 error=0x00000000 available=- version=- page=- ms=71
+UPDATE-CHECK: PPSA00000 installed=01.000.000 state=unknown reason=not-listed http=404 error=0x00000000 available=- version=- page=- ms=90
+UPDATE-CHECK: done requests=5 answered=5
+```
+
+| Checked | Result |
+| --- | --- |
+| The catalog is reachable with the console's own HTTPS and certificate store | Yes: five answers, 71 to 154 ms each, including creating and destroying the `sceHttp` contexts |
+| The title's own `param.json` is readable at `/app0/sce_sys/param.json` | Yes: the self check used its title ID and content version |
+| Each kind of answer is decided correctly | Update available, up to date, coming soon, and not listed all matched what the catalog held |
+| The report file in `/download0` | Written, and identical to the kernel log lines |
+| The title ends itself | Yes, 60 seconds after reporting, through `sceSystemServiceLoadExec("exit")`: the kernel log shows `Kill for LoadExec ... => 0` and a normal unload, with no core dump and no forced kill |
+| The console afterwards | Services answering, installed files unchanged two minutes later |
+
+Not exercised on hardware: a failing network (the timeout and error paths are
+covered by the host tests only), an oversized answer, and calling the check
+from a worker thread beside a running renderer.
