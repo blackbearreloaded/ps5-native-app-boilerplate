@@ -1,0 +1,137 @@
+# Update check
+
+An app listed on [homebrew.page](https://homebrew.page) can tell its user that
+a newer release exists. This optional example is that check: two files you
+copy into your project, and a small title that exercises them on a console.
+
+It asks the catalog one question, over HTTPS, about the running app only. It
+downloads nothing else, installs nothing, and works inside the normal app
+sandbox: no elevation and no loader service.
+
+## Use it in your app
+
+Copy `examples/update-check/update_check.h` and `update_check.c` into your
+sources. They depend on nothing else in this repository and compile as C11 or
+as C++.
+
+```cpp
+#include "update_check.h"
+
+// On a worker thread, once per launch:
+update_check_result result;
+update_check_run_self(&result);
+if (result.state == UPDATE_CHECK_AVAILABLE)
+    show_notice("Update available: %s", result.version);
+```
+
+`update_check_run_self` reads the app's own title ID and `contentVersion` from
+`/app0/sce_sys/param.json`, so there is nothing to configure and nothing to
+keep in sync with a release. `update_check_run(title_id, installed, &result)`
+does the same for values you pass.
+
+| `result.state` | Meaning | What to do |
+| --- | --- | --- |
+| `UPDATE_CHECK_AVAILABLE` | The catalog lists a higher content version | Tell the user. `result.version` is the release's name, `result.page` its page on homebrew.page. |
+| `UPDATE_CHECK_UP_TO_DATE` | The catalog has nothing newer | Nothing. |
+| `UPDATE_CHECK_UNKNOWN` | No answer, or one that can't be used | Nothing. `result.reason` says why, for your log. |
+
+Rules that keep it harmless:
+
+- **Never on the main thread.** The call blocks for up to five seconds per
+  network phase. Run it on a worker and let the app start without it.
+- **Once per launch** is enough; the catalog changes a few times a day.
+- **Unknown means silence.** No network, an app that isn't listed, a catalog
+  that doesn't know the app's content version: all give
+  `UPDATE_CHECK_UNKNOWN`, and none is an error worth showing.
+- **Only notify.** The check never downloads or installs. Point the user to
+  ProsperoStore or to the app's page.
+- **One check at a time.** The function isn't reentrant.
+
+## What makes an update visible
+
+The catalog compares **content versions**: the `contentVersion` in your
+`sce_sys/param.json`, in the PlayStation format `NN.NNN.NNN` (`01.000.070`). An
+update exists when the catalog's value for your newest release is higher than
+the one in the running app. So:
+
+- raise `contentVersion` in every release, and build from that commit;
+- keep `sce_sys/param.json` in your repository, so the catalog can read it at
+  your release tag.
+
+The catalog's
+[App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md)
+page has the full rules, and its
+[Store API](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md)
+page specifies the file this check reads
+(`https://homebrew.page/api/v1/apps/<TITLEID>.json`).
+
+## How it works
+
+1. Build the address from the title ID. Anything that isn't four capital
+   letters and five digits is refused before a request is made.
+2. `GET` it through the console's own `sceHttp`, with certificate verification
+   on (server, name, validity dates, known authority, SNI), no redirects, and a
+   `User-Agent` naming the app: `homebrew-update-check/1 (<TITLEID>)`.
+3. Refuse an answer larger than 64 KiB, a status other than 200, and anything
+   that isn't one complete JSON object.
+4. Read `status` and `content_version`. A reservation (`coming_soon`) and a
+   `null` version are "unknown".
+5. Compare the two content versions as three numbers.
+
+Everything read from the network is treated as hostile: lengths are checked,
+values are copied only into buffers that hold them, nesting is bounded, and an
+answer cut short in transit is refused as a whole. The `sceHttp` contexts are
+created for the request and destroyed after it, so the check leaves nothing
+running. It uses about 5 MiB while the request is in flight.
+
+`update_check_run_with` takes a transport of your own, for an app that already
+has an HTTP client, and is what the tests use.
+
+## The example title
+
+`make update-check-example` builds `dist/PPSA99791/`, a title with no
+interface that checks itself and the titles in
+[`examples/update-check/assets/targets.txt`](../examples/update-check/assets/targets.txt),
+then reports each answer three ways:
+
+- a line in the kernel log, starting `UPDATE-CHECK:`;
+- the same line in `/download0/update-check.txt`;
+- one notification with the number of requests answered.
+
+```text
+UPDATE-CHECK: PPSA99002 installed=01.000.000 state=update-available reason=ok http=200 error=0x00000000 available=01.000.070 version=01.000.070 page=https://homebrew.page/app/PPSA99002/ ms=412
+```
+
+The example's own title ID isn't in the catalog, so its self check answers
+`not-listed`: that is the expected result, and it shows the 404 path working.
+Edit `targets.txt` to check other titles.
+
+Two build definitions are for scripted console runs:
+
+| Definition | Effect |
+| --- | --- |
+| `UPDATE_CHECK_RUN_TAG=<word>` | Printed in the first line, to tell runs apart |
+| `UPDATE_CHECK_EXIT_AFTER=<seconds>` | The title ends itself that long after reporting, through `sceSystemServiceLoadExec("exit")`. Without it the title stays up until it is closed from the home screen. |
+
+```bash
+APP_DEFINITIONS="UPDATE_CHECK_RUN_TAG=run1 UPDATE_CHECK_EXIT_AFTER=30" make update-check-example
+```
+
+## Tests
+
+```bash
+make test-update-check
+```
+
+Builds the two files into a host test with the address and undefined-behaviour
+sanitizers and checks version parsing and ordering, the address builder, the
+JSON reader (escapes, nesting, wrong types, oversized and malformed input), the
+decision for every kind of answer, the mapping of HTTP statuses and transport
+failures, and every truncation and thousands of single-byte mutations of a real
+API answer. Host tests can't establish that the console's HTTPS reaches the
+catalog; the example title does that.
+
+## Console validation
+
+Not yet run on hardware. This section records the first run: firmware, the
+exact build, each line the title printed, and how the title ended.

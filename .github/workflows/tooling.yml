@@ -98,6 +98,14 @@ jobs:
           make sandbox-elevation-ffpfsc
           test ! -e dist/PPSA99790/assets
 
+      - name: Check update-check parsing and decisions
+        run: make test-update-check
+
+      - name: Build update-check example
+        run: |
+          make update-check-example
+          test -f dist/PPSA99791/assets/targets.txt
+
       - name: Reproduce clean-room runtime shim
         run: make libc
 

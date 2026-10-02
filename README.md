@@ -38,6 +38,11 @@ capability, and verifies a write under `/data` after an explicit success reply.
 The versioned protocol currently supports only filesystem access and documents
 how to add capabilities. It is separate from the default sandboxed skeleton.
 
+An opt-in [update check](docs/UPDATE_CHECK.md) lets an app listed on
+[homebrew.page](https://homebrew.page) tell its user that a newer release
+exists: two standalone files that ask the catalog over the console's own HTTPS
+and compare content versions. It needs no elevation and installs nothing.
+
 ## What is included
 
 | Feature | Included implementation |
@@ -406,6 +411,7 @@ tests/                        Host-native C++ unit and tooling integration tests
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
 | [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
+| [Update check](docs/UPDATE_CHECK.md) | Catalog update check for listed apps: the two files, the rules, the example title |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |
 

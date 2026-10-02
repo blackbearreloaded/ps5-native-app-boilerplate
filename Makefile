@@ -51,7 +51,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-bu
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 SANDBOX_ELEVATION_HELPER := build/sandbox-elevation/sandbox-elevator.elf
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-helper sandbox-elevation-ffpfsc deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-helper sandbox-elevation-ffpfsc update-check-example test-update-check deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -64,7 +64,7 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: test-unit test-integration test-elevation
+test: test-unit test-integration test-elevation test-update-check
 
 .PHONY: test-elevation
 test-elevation:
@@ -75,6 +75,12 @@ test-elevation:
 	@build/tests/test_elevation
 	@printf '%s\n' 'Elevation protocol and rollback checks passed.'
 
+test-update-check:
+	@mkdir -p build/tests
+	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		tests/test_update_check.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_update_check
+	@build/tests/test_update_check
+	@printf '%s\n' 'Update-check version, parsing and decision checks passed.'
 test-deps:
 	@printf '%s\n' '==> [test-deps] Fetching the pinned host-only GoogleTest source'
 	@bash tools/setup-test-dependencies.sh >/dev/null
@@ -145,6 +151,12 @@ sandbox-elevation-ffpfsc: $(RUNTIME) sandbox-elevation-helper
 		APP_ROOT_FILES=$(SANDBOX_ELEVATION_HELPER) \
 		bash tools/build.sh Ffpfsc
 
+update-check-example: $(RUNTIME)
+	@printf '%s\n' '==> [update-check] Building the catalog update-check example title'
+	@APP_SOURCE_DIR=examples/update-check \
+		APP_PARAM=examples/update-check/sce_sys/param.json \
+		APP_SCE_SYS=sce_sys APP_ASSETS=examples/update-check/assets \
+		bash tools/build.sh Folder
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
@@ -203,6 +215,8 @@ help:
 	  'make ffpfsc          Build the folder and compressed .ffpfsc image' \
 	  'make packages        Build folder, .ffpkg, and .ffpfsc outputs' \
 	  'make sandbox-elevation-ffpfsc  Build the exact-title /data proof image' \
+	  'make update-check-example  Build the catalog update-check example title' \
+	  'make test-update-check     Run the update-check host tests' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
 	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES' \

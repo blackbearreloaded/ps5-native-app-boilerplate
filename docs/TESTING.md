@@ -10,7 +10,8 @@ hardware can prove.
 | `make test-deps` | Fetch and verify the pinned host-only GoogleTest source. |
 | `make test-unit` | Compile and run the host-native GoogleTest application tests. |
 | `make test-integration` | Exercise repository scripts through subprocesses and temporary files. |
-| `make test` | Run both host test suites. |
+| `make test-update-check` | Check the [update check](UPDATE_CHECK.md): versions, parsing, decisions, hostile input, under sanitizers. |
+| `make test` | Run every host test suite. |
 | `make check` | Run linting, all host tests, and a complete folder build. |
 
 GitHub Actions runs `make test-unit` and `make test-integration` as separate
