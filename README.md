@@ -25,6 +25,7 @@ the application and repository-owned tooling remain C/C++.
 | PS5 hardware | Current C++20 skeleton and runtime verified on firmware 6.02 and 12.70 |
 | Runtime shim | Project-authored, reproducible artifact with no proprietary implementation code |
 | Output formats | Title folder, UFS2 `.ffpkg`, and compressed `.ffpfsc` |
+| Update check | Optional kit; run on a PS5 against the homebrew.page catalog (see [Update check](#update-check)) |
 | CI | Runs the native Linux Make workflow and reproduces the runtime shim |
 
 Firmware and homebrew-loader behavior vary. The generated runtime is verified
@@ -38,7 +39,7 @@ capability, and verifies a write under `/data` after an explicit success reply.
 The versioned protocol currently supports only filesystem access and documents
 how to add capabilities. It is separate from the default sandboxed skeleton.
 
-An opt-in [update check](docs/UPDATE_CHECK.md) lets an app listed on
+An opt-in [update check](#update-check) lets an app listed on
 [homebrew.page](https://homebrew.page) tell its user that a newer release
 exists: two standalone files that ask the catalog over the console's own HTTPS
 and compare content versions. It needs no elevation and installs nothing.
@@ -55,6 +56,7 @@ and compare content versions. It needs no elevation and installs nothing.
 | Presentation | Replaceable icon, 4K BC7 backgrounds, and ATRAC9 selection audio |
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
 | Root skeleton | C++20 graphical Hello World with RAII, bounded views, unique ownership, CPU-rendered text, shapes, and packaged data |
+| Update check | Optional [`examples/update-check`](examples/update-check): tells the users of an app listed on homebrew.page that a newer release exists |
 | Validation | C++ unit tests, host integration tests, prerequisites, and static ELF/FSELF inspection |
 
 ## Quick start
@@ -269,6 +271,48 @@ available, and the repository-owned allocation bridge supports
 values and unique ownership; `std::shared_ptr` and the complete libc++ runtime
 are intentionally outside the baseline.
 
+### Update check
+
+An app listed in the [homebrew.page](https://homebrew.page) catalog can tell
+its user when a newer release exists. The check is optional and isn't part of
+the default skeleton: add it when your app is listed.
+
+1. Copy the two files into your sources. Everything under `src/` is compiled
+   automatically:
+
+   ```bash
+   cp examples/update-check/update_check.h examples/update-check/update_check.c src/
+   ```
+
+2. Call it once per launch, from a worker thread:
+
+   ```cpp
+   #include "update_check.h"
+
+   update_check_result result;
+   update_check_run_self(&result);
+   if (result.state == UPDATE_CHECK_AVAILABLE)
+       show_notice("Update available: %s", result.version);
+   ```
+
+3. Raise `contentVersion` in `sce_sys/param.json` with every release. That
+   number is what the catalog and the check compare.
+
+`update_check_run_self` reads the app's own title ID and `contentVersion` from
+`/app0/sce_sys/param.json`, asks the catalog over the console's own HTTPS with
+certificate verification, and answers one of three things: an update is
+available, the app is up to date, or nothing can be said (no network, the app
+isn't listed). It works inside the normal sandbox, needs no elevation, and
+never downloads or installs anything.
+
+| | |
+| --- | --- |
+| Guide, rules and the console results | [docs/UPDATE_CHECK.md](docs/UPDATE_CHECK.md) |
+| The two files | [`examples/update-check/`](examples/update-check) |
+| Example title | `make update-check-example` builds `dist/PPSA99780/` |
+| Host tests | `make test-update-check` |
+| What the catalog publishes | [Store API](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md) and [App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md) |
+
 ### Read-only application assets
 
 Put fonts, images, configuration defaults, shaders, and other packaged data
@@ -393,6 +437,8 @@ runtime/libc.prx.sha256       Expected digest for the generated loader shim
 tools/rebuild-libc.sh         Linux/WSL deterministic shim reproduction check
 tools/rebuild-libc.ps1        Windows deterministic shim reproduction check
 tests/                        Host-native C++ unit and tooling integration tests
+examples/sandbox-elevation/   Optional filesystem capability example
+examples/update-check/        Optional catalog update check: update_check.h, update_check.c, example title
 ```
 
 ## Documentation

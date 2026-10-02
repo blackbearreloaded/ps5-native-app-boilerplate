@@ -14,6 +14,17 @@ Copy `examples/update-check/update_check.h` and `update_check.c` into your
 sources. They depend on nothing else in this repository and compile as C11 or
 as C++.
 
+In an app built from this template that is one command, because every C and
+C++ file under `src/` is compiled automatically:
+
+```bash
+cp examples/update-check/update_check.h examples/update-check/update_check.c src/
+```
+
+The copies build with `make` and pass `make lint` unchanged. In another
+project, add the two files to your build; they need only the console's own
+`libSceHttp`, `libSceSsl`, `libSceNet` and `libkernel`.
+
 ```cpp
 #include "update_check.h"
 
@@ -34,6 +45,11 @@ does the same for values you pass.
 | `UPDATE_CHECK_AVAILABLE` | The catalog lists a higher content version | Tell the user. `result.version` is the release's name, `result.page` its page on homebrew.page. |
 | `UPDATE_CHECK_UP_TO_DATE` | The catalog has nothing newer | Nothing. |
 | `UPDATE_CHECK_UNKNOWN` | No answer, or one that can't be used | Nothing. `result.reason` says why, for your log. |
+
+The check is for apps that are **listed in the catalog**. Before your app is
+listed, its title ID isn't known there and every check answers "not listed",
+which is `UPDATE_CHECK_UNKNOWN`. To get listed, see the catalog's
+[submission guide](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/submitting.md).
 
 Rules that keep it harmless:
 

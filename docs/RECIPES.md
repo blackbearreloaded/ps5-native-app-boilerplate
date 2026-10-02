@@ -60,6 +60,11 @@ make PACBREW_PACKAGES=openssl
 Resolve hostnames and certificate failures explicitly. Never disable peer or
 hostname verification in a distributed application.
 
+For a small HTTPS request without any extra library, the
+[update check](UPDATE_CHECK.md) shows the console's own `sceHttp` with
+certificate verification on: its `update_check_sce_fetch` function is a
+complete GET that has run on hardware.
+
 ## AudioOut
 
 The hardware-proven baseline initializes AudioOut, obtains the active user, and
