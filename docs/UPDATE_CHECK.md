@@ -121,6 +121,10 @@ has an HTTP client, and is what the tests use.
 
 ## The transport: libcurl on the console
 
+The full guide to libcurl on the console (large downloads, elevated apps,
+adding other PacBrew libraries, troubleshooting) is [CURL.md](CURL.md). In
+short:
+
 PacBrew's archives are built for the payload SDK's libc, not for a native
 title. They link, but four things stop them working on the console. Each is
 answered in `console_curl.c`, and each was found on hardware by ProsperoRadio

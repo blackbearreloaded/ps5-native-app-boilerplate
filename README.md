@@ -317,7 +317,7 @@ shipping its licence notices; the guide lists them.
 | --- | --- |
 | Guide, rules and the console results | [docs/UPDATE_CHECK.md](docs/UPDATE_CHECK.md) |
 | The four files | [`examples/update-check/`](examples/update-check) |
-| libcurl on the console (shims, `fcntl` wrap, certificates) | [The transport](docs/UPDATE_CHECK.md#the-transport-libcurl-on-the-console) |
+| libcurl on the console: setup, large downloads, elevated apps, troubleshooting | [docs/CURL.md](docs/CURL.md) |
 | Example title | `make update-check-example` builds `dist/PPSA99780/` |
 | Host tests | `make test-update-check` |
 | What the catalog publishes | [Store API](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md) and [App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md) |
@@ -489,7 +489,9 @@ tools/rebuild-libc.sh         Linux/WSL deterministic shim reproduction check
 tools/rebuild-libc.ps1        Windows deterministic shim reproduction check
 tests/                        Host-native C++ unit and tooling integration tests
 examples/sandbox-elevation/   Optional filesystem capability example
-examples/update-check/        Optional catalog update check: update_check.h, update_check.c, example title
+examples/update-check/        Optional catalog update check: update_check.*, console_curl.* (libcurl support), example title
+examples/curl/                Blocking send/read/abort API on curl multi, for large downloads
+tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that the console lacks
 ```
 
 ## Documentation
@@ -508,7 +510,8 @@ examples/update-check/        Optional catalog update check: update_check.h, upd
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
 | [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
-| [Update check](docs/UPDATE_CHECK.md) | Catalog update check for listed apps: the two files, the rules, the example title |
+| [Update check](docs/UPDATE_CHECK.md) | Catalog update check for listed apps: the four files, the rules, the example title |
+| [libcurl](docs/CURL.md) | HTTPS with libcurl and OpenSSL: setup, what the console needs, large downloads, elevated apps, troubleshooting |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |
 

@@ -60,8 +60,8 @@ make PACBREW_PACKAGES=openssl
 Resolve hostnames and certificate failures explicitly. Never disable peer or
 hostname verification in a distributed application.
 
-For HTTPS with libcurl, take `console_curl.h` and `console_curl.c` from the
-[update check](UPDATE_CHECK.md#the-transport-libcurl-on-the-console), add
+For HTTPS with libcurl, follow [libcurl in a PS5 native app](CURL.md): take
+`console_curl.h` and `console_curl.c` from the update check, add
 `PACBREW_PACKAGES += libcurl` and `APP_WRAP_SYMBOLS += fcntl`, and call
 `console_curl_setup(easy)` on every handle (no signals, the console's
 certificate list, non-blocking sockets). Its
