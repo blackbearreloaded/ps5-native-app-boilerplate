@@ -9,16 +9,23 @@ include /opt/ps5-payload-sdk/toolchain/prospero.mk
 endif
 
 OUTPUT ?= ../../../build/sandbox-elevation/sandbox-elevator.elf
-CXXFLAGS := -std=c++20 -O2 -g -Wall -Wextra -Werror
+TARGET_TITLE ?= PPSA99790
+CFLAGS := -std=c11 -O2 -g -Wall -Wextra -Werror -I. \
+	-DTARGET_TITLE=\"$(TARGET_TITLE)\" -DLAPY_ELF_HELPER=1 \
+	-DLAPY_SERVICE=0 -DLAPY_REQUIRE_CLIENT_RESULT=0
 LDFLAGS := -Wl,--build-id=none
+SOURCES := owned_root_helper.c donor_transaction.c vnode_ref_probe.c
+HEADERS := donor_transaction.h elevation_protocol.h owned_identity.h vnode_ref_probe.h
 
-.PHONY: all clean
+.PHONY: all clean FORCE
 
 all: $(OUTPUT)
 
-$(OUTPUT): main.cpp ../protocol.hpp
+$(OUTPUT): FORCE $(SOURCES) $(HEADERS)
 	@mkdir -p -- $(@D)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SOURCES)
+
+FORCE:
 
 clean:
 	rm -f -- $(OUTPUT)

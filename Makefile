@@ -30,7 +30,10 @@ TITLE_ID ?=
 APP_NAME ?=
 APP_CATEGORY ?= game
 CONTENT_SUFFIX ?=
+HOST_CC ?= clang
 HOST_CXX ?= clang++
+HOST_TEST_CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
+	-ffunction-sections -fdata-sections
 HOST_TEST_CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
 	-ffunction-sections -fdata-sections
 HOST_TEST_LDFLAGS ?= -Wl,--gc-sections
@@ -38,7 +41,7 @@ GTEST_ARGS ?=
 BUILD_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
 USE_CCACHE ?= 1
 export BUILD_JOBS USE_CCACHE
-export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
+export HOST_CC HOST_CXX HOST_TEST_CFLAGS HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES APP_WRAP_SYMBOLS
 export APP_SOURCE_DIR APP_PARAM APP_SCE_SYS APP_ASSETS APP_ROOT_FILES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
@@ -51,6 +54,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-bu
 	$(wildcard tooling/native/runtime/*.txt)
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 SANDBOX_ELEVATION_HELPER := build/sandbox-elevation/sandbox-elevator.elf
+SANDBOX_ELEVATION_TITLE ?= PPSA99790
 
 .PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-helper sandbox-elevation-ffpfsc update-check-example test-update-check deploy undeploy clean distclean help
 
@@ -74,7 +78,12 @@ test-elevation:
 	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -idirafter .deps/native/ps5-payload-sdk/target/include \
 		tests/test_elevation.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_elevation
 	@build/tests/test_elevation
-	@printf '%s\n' 'Elevation protocol and rollback checks passed.'
+	@$(HOST_CC) $(HOST_TEST_CFLAGS) -Iexamples/sandbox-elevation/payload \
+		examples/sandbox-elevation/payload/donor_transaction.c \
+		examples/sandbox-elevation/payload/vnode_ref_probe.c \
+		tests/test_owned_root.c $(HOST_TEST_LDFLAGS) -o build/tests/test_owned_root
+	@build/tests/test_owned_root
+	@printf '%s\n' 'Elevation protocol, ownership and runtime-probe checks passed.'
 
 test-update-check:
 	@mkdir -p build/tests
@@ -141,8 +150,10 @@ sandbox-elevation-helper:
 	@bash tools/setup-native-dependencies.sh >/dev/null
 	@$(MAKE) -C examples/sandbox-elevation/payload \
 		PS5_PAYLOAD_SDK="$(abspath .deps/native/ps5-payload-sdk)" \
+		TARGET_TITLE="$(SANDBOX_ELEVATION_TITLE)" \
 		OUTPUT="$(abspath $(SANDBOX_ELEVATION_HELPER))"
-	@python3 tools/validate-elevation-helper.py "$(SANDBOX_ELEVATION_HELPER)"
+	@python3 tools/validate-elevation-helper.py "$(SANDBOX_ELEVATION_HELPER)" \
+		"$(SANDBOX_ELEVATION_TITLE)"
 
 sandbox-elevation-ffpfsc: $(RUNTIME) sandbox-elevation-helper
 	@printf '%s\n' '==> [sandbox-elevation] Building the self-elevating proof image'

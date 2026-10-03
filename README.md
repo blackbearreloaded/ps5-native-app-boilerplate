@@ -33,11 +33,14 @@ on 6.02 and 12.70; validate the exact artifact on other target environments
 before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
-An opt-in [elevation protocol example](docs/SANDBOX_ELEVATION.md) submits a
-bundled helper to an already-running loopback elfldr, requests the filesystem
+An opt-in [elevation protocol example](docs/SANDBOX_ELEVATION.md) submits an
+exact-title helper to an already-running loopback elfldr, requests the filesystem
 capability, and verifies a write under `/data` after an explicit success reply.
-The versioned protocol currently supports only filesystem access and documents
-how to add capabilities. It is separate from the default sandboxed skeleton.
+Its guarded, owned-reference backend is adapted from
+[PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon);
+the former unreferenced root-vnode pointer replacement has been removed. The
+versioned client protocol still supports only filesystem access and is separate
+from the default sandboxed skeleton.
 
 An opt-in [update check](#update-check) lets an app listed on
 [homebrew.page](https://homebrew.page) tell its user that a newer release
@@ -57,6 +60,7 @@ and compare content versions. It needs no elevation and installs nothing.
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
 | Root skeleton | C++20 graphical Hello World with RAII, bounded views, unique ownership, CPU-rendered text, shapes, and packaged data |
 | Update check | Optional [`examples/update-check`](examples/update-check): tells the users of an app listed on homebrew.page that a newer release exists |
+| Sandbox elevation | Optional exact-title helper with Lapy-derived move-only vnode-reference ownership and fail-closed runtime checks |
 | Validation | C++ unit tests, host integration tests, prerequisites, and static ELF/FSELF inspection |
 
 ## Quick start
@@ -488,7 +492,7 @@ runtime/libc.prx.sha256       Expected digest for the generated loader shim
 tools/rebuild-libc.sh         Linux/WSL deterministic shim reproduction check
 tools/rebuild-libc.ps1        Windows deterministic shim reproduction check
 tests/                        Host-native C++ unit and tooling integration tests
-examples/sandbox-elevation/   Optional filesystem capability example
+examples/sandbox-elevation/   Optional owned-reference filesystem capability example
 examples/update-check/        Optional catalog update check: update_check.*, console_curl.* (libcurl support), example title
 examples/curl/                Blocking send/read/abort API on curl multi, for large downloads
 tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that the console lacks

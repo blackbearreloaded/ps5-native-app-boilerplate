@@ -8,7 +8,7 @@ import struct
 import sys
 
 
-def validate(data):
+def validate(data, expected_title=None):
     if len(data) < 64 or data[:6] != b"\x7fELF\x02\x01":
         raise ValueError("helper must be a little-endian ELF64")
     section_offset = struct.unpack_from("<Q", data, 40)[0]
@@ -21,8 +21,13 @@ def validate(data):
         section = struct.unpack_from("<IIQQQQIIQQ", data, section_offset + index * entry_size)
         if section[1] != 8 and section[4] + section[5] > len(data):
             raise ValueError("helper section extends beyond the ELF stream")
+    if expected_title:
+        if b"ps5-native-app-boilerplate-owned-root-v1:" not in data:
+            raise ValueError("helper does not contain the owned-root backend marker")
+        if expected_title.encode() + b"\0" not in data:
+            raise ValueError("helper is not bound to the requested title")
 
 
 if __name__ == "__main__":
-    validate(Path(sys.argv[1]).read_bytes())
-    print("Helper ELF/socket framing validated.")
+    validate(Path(sys.argv[1]).read_bytes(), sys.argv[2] if len(sys.argv) > 2 else None)
+    print("Owned-root helper identity, title and ELF/socket framing validated.")
