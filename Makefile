@@ -11,6 +11,7 @@ APP_DEFINITIONS ?=
 APP_INCLUDE_PATHS ?=
 APP_STATIC_ARCHIVES ?=
 APP_RUNTIME_MODULES ?=
+APP_WRAP_SYMBOLS ?=
 APP_SOURCE_DIR ?=
 APP_PARAM ?=
 APP_SCE_SYS ?=
@@ -38,7 +39,7 @@ BUILD_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
 USE_CCACHE ?= 1
 export BUILD_JOBS USE_CCACHE
 export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
-export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
+export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES APP_WRAP_SYMBOLS
 export APP_SOURCE_DIR APP_PARAM APP_SCE_SYS APP_ASSETS APP_ROOT_FILES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
 export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
@@ -156,7 +157,10 @@ update-check-example: $(RUNTIME)
 	@APP_SOURCE_DIR=examples/update-check \
 		APP_PARAM=examples/update-check/sce_sys/param.json \
 		APP_SCE_SYS=sce_sys APP_ASSETS=examples/update-check/assets \
+		PACBREW_PACKAGES="libcurl $(PACBREW_PACKAGES)" \
+		APP_WRAP_SYMBOLS="fcntl $(APP_WRAP_SYMBOLS)" \
 		bash tools/build.sh Folder
+
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
@@ -219,7 +223,7 @@ help:
 	  'make test-update-check     Run the update-check host tests' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
-	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES' \
+	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES, APP_WRAP_SYMBOLS' \
 	  'PacBrew variables:   PACBREW_PACKAGES, PACBREW_INCLUDE_PATHS, PACBREW_STATIC_ARCHIVES' \
 	  'Deploy variables:    FTP_PORT=2121, DEPLOY_FORMAT=folder|ffpfsc|ffpkg, DEPLOY_DRY_RUN=0|1' \
 	  'Local defaults:      Copy .env.example to the ignored .env file' \

@@ -56,6 +56,24 @@ replace the pinned SDK or install files globally. PacBrew recipes and every
 linked third-party library retain their upstream licenses; applications must
 review those terms before redistribution.
 
+The update-check example (`make update-check-example`) selects `libcurl`, which
+statically links these PacBrew libraries into the example title. Its build
+output stays under ignored `dist/` and is not distributed by this repository; an
+application that ships the update check ships them and must carry their notices:
+
+| Component | Version in PacBrew v0.40.2 | License |
+| --- | --- | --- |
+| [libcurl](https://curl.se/) | 8.18.0 | curl license (MIT/X derivative) |
+| [OpenSSL](https://www.openssl.org/) | 3.5.2 | Apache License 2.0 |
+| [zlib](https://zlib.net/) | 1.3.2 | zlib license |
+| [zstd](https://github.com/facebook/zstd) | 1.5.6 | BSD-3-Clause (dual-licensed with GPL-2.0) |
+| [libpsl](https://github.com/rockdaboot/libpsl) | 0.21.5 | MIT; built-in Public Suffix List data MPL-2.0 |
+
+`examples/update-check/console_curl.c`, which makes these libraries run in a
+native title, is original BlackBearReloaded code (GPL-3.0-or-later), taken from
+the ProsperoRadio and ProsperoLichess projects. Its `gmtime_r` follows Howard
+Hinnant's public-domain `civil_from_days` algorithm.
+
 ## Optional UFS2Tool dependency
 
 When `.ffpkg` output is requested, the platform bootstrapper fetches

@@ -60,10 +60,18 @@ make PACBREW_PACKAGES=openssl
 Resolve hostnames and certificate failures explicitly. Never disable peer or
 hostname verification in a distributed application.
 
-For a small HTTPS request without any extra library, the
-[update check](UPDATE_CHECK.md) shows the console's own `sceHttp` with
-certificate verification on: its `update_check_sce_fetch` function is a
-complete GET that has run on hardware.
+For HTTPS with libcurl, take `console_curl.h` and `console_curl.c` from the
+[update check](UPDATE_CHECK.md#the-transport-libcurl-on-the-console), add
+`PACBREW_PACKAGES += libcurl` and `APP_WRAP_SYMBOLS += fcntl`, set
+`CURLOPT_NOSIGNAL` and pass `console_curl_ca_file()` as `CURLOPT_CAINFO`. Its
+`update_check_fetch` function is a complete GET. `APP_WRAP_SYMBOLS` takes any
+list of symbols: each `S` then resolves to your `__wrap_S`, and `__real_S` to
+the original.
+
+For a small request without any extra library, the same file built with
+`UPDATE_CHECK_USE_SCEHTTP` uses the console's own `sceHttp` with certificate
+verification on. It has run on hardware in a sandboxed title; an elevated app
+can't use it (`sceSsl` then rejects public certificates with `0x8095f00c`).
 
 ## AudioOut
 

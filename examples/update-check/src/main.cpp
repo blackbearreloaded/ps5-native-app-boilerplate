@@ -12,6 +12,15 @@
  */
 #include "../update_check.h"
 
+#ifndef UPDATE_CHECK_USE_SCEHTTP
+#include "../console_curl.h"
+
+#include <curl/curl.h>
+#define EXAMPLE_TRANSPORT "libcurl"
+#else
+#define EXAMPLE_TRANSPORT "sceHttp"
+#endif
+
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -94,6 +103,15 @@ void report(const char *label, const update_check_result &result,
                         result.page[0] != '\0' ? result.page : "-",
                         static_cast<unsigned long long>(microseconds / 1000u));
     emit(line.data());
+#ifndef UPDATE_CHECK_USE_SCEHTTP
+    if (result.platform_error <= -10000)
+    {
+        const auto code = static_cast<CURLcode>(-result.platform_error - 10000);
+        (void)std::snprintf(line.data(), line.size(), "%s curl=%d (%s)", label,
+                            static_cast<int>(code), curl_easy_strerror(code));
+        emit(line.data());
+    }
+#endif
     ++requested;
     if (result.http_status != 0)
         ++answered;
@@ -156,7 +174,16 @@ int main()
 {
     (void)sceSystemServiceHideSplashScreen();
     report_file = sceKernelOpen(report_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    emit("start tag=" EXAMPLE_STR(UPDATE_CHECK_RUN_TAG) " host=" UPDATE_CHECK_HOST);
+    emit("start tag=" EXAMPLE_STR(UPDATE_CHECK_RUN_TAG) " host=" UPDATE_CHECK_HOST
+                                                        " transport=" EXAMPLE_TRANSPORT);
+#ifndef UPDATE_CHECK_USE_SCEHTTP
+    {
+        std::array<char, 220> line{};
+        (void)std::snprintf(line.data(), line.size(), "curl=%s ca=%s",
+                            curl_version_info(CURLVERSION_NOW)->version, console_curl_ca_file());
+        emit(line.data());
+    }
+#endif
 
     {
         update_check_result result{};

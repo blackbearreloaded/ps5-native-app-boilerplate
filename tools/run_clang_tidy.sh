@@ -37,6 +37,16 @@ if (( ${#app_c_sources[@]} )); then
         -std=c11 -isystem "$sdk/target/include"
 fi
 
+# The update-check example uses libcurl's headers from the pinned PacBrew prefix.
+pacbrew_include="$(bash "$root/tools/setup-pacbrew-dependencies.sh" --all)/user/homebrew/include"
+
+mapfile -d '' example_c_sources < <(find "$root/examples" -type f -name '*.c' -print0)
+if (( ${#example_c_sources[@]} )); then
+    "$tidy" "${example_c_sources[@]}" --quiet --warnings-as-errors='*' -- \
+        -std=c11 --target=x86_64-sie-ps5 -isystem "$sdk/target/include" \
+        -isystem "$pacbrew_include"
+fi
+
 mapfile -d '' app_cpp_sources < <(find "$root/src" -type f \
     \( -name '*.cc' -o -name '*.cpp' \) -print0)
 mapfile -d '' example_cpp_sources < <(find "$root/examples" -type f \
@@ -46,5 +56,6 @@ app_cpp_sources+=("$root/tooling/native/app_crt.cpp" "$root/tooling/native/app_c
 if (( ${#app_cpp_sources[@]} )); then
     "$tidy" "${app_cpp_sources[@]}" --quiet --warnings-as-errors='*' -- \
         -std=c++20 -fno-exceptions -fno-rtti --target=x86_64-sie-ps5 \
-        -isystem "$sdk/target/include/c++/v1" -isystem "$sdk/target/include"
+        -isystem "$sdk/target/include/c++/v1" -isystem "$sdk/target/include" \
+        -isystem "$pacbrew_include"
 fi

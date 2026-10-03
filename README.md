@@ -277,14 +277,21 @@ An app listed in the [homebrew.page](https://homebrew.page) catalog can tell
 its user when a newer release exists. The check is optional and isn't part of
 the default skeleton: add it when your app is listed.
 
-1. Copy the two files into your sources. Everything under `src/` is compiled
+1. Copy the four files into your sources. Everything under `src/` is compiled
    automatically:
 
    ```bash
-   cp examples/update-check/update_check.h examples/update-check/update_check.c src/
+   cp examples/update-check/{update_check,console_curl}.{h,c} src/
    ```
 
-2. Call it once per launch, from a worker thread:
+2. Link libcurl and wrap `fcntl`, in the `Makefile` or your `.env`:
+
+   ```make
+   PACBREW_PACKAGES += libcurl
+   APP_WRAP_SYMBOLS += fcntl
+   ```
+
+3. Call it once per launch, from a worker thread:
 
    ```cpp
    #include "update_check.h"
@@ -295,20 +302,22 @@ the default skeleton: add it when your app is listed.
        show_notice("Update available: %s", result.version);
    ```
 
-3. Raise `contentVersion` in `sce_sys/param.json` with every release. That
+4. Raise `contentVersion` in `sce_sys/param.json` with every release. That
    number is what the catalog and the check compare.
 
 `update_check_run_self` reads the app's own title ID and `contentVersion` from
-`/app0/sce_sys/param.json`, asks the catalog over the console's own HTTPS with
-certificate verification, and answers one of three things: an update is
-available, the app is up to date, or nothing can be said (no network, the app
-isn't listed). It works inside the normal sandbox, needs no elevation, and
-never downloads or installs anything.
+`/app0/sce_sys/param.json`, asks the catalog over HTTPS (libcurl and OpenSSL,
+verified against the console's certificate list), and answers one of three
+things: an update is available, the app is up to date, or nothing can be said
+(no network, the app isn't listed). It works in the normal sandbox and in an
+elevated app, and never downloads or installs anything. Shipping libcurl means
+shipping its licence notices; the guide lists them.
 
 | | |
 | --- | --- |
 | Guide, rules and the console results | [docs/UPDATE_CHECK.md](docs/UPDATE_CHECK.md) |
-| The two files | [`examples/update-check/`](examples/update-check) |
+| The four files | [`examples/update-check/`](examples/update-check) |
+| libcurl on the console (shims, `fcntl` wrap, certificates) | [The transport](docs/UPDATE_CHECK.md#the-transport-libcurl-on-the-console) |
 | Example title | `make update-check-example` builds `dist/PPSA99780/` |
 | Host tests | `make test-update-check` |
 | What the catalog publishes | [Store API](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md) and [App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md) |

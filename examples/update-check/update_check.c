@@ -524,10 +524,114 @@ const char *update_check_reason_text(update_check_reason reason)
 
 #ifndef UPDATE_CHECK_NO_NETWORK
 
-/* The console's HTTPS: the system sceHttp and sceSsl services, with the system's certificate
- * store. The sequence and option values follow apps where they are proven on hardware. */
-
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+    int sceKernelOpen(const char *path, int flags, int mode);
+    int64_t sceKernelRead(int descriptor, void *buffer, size_t length);
+    int sceKernelClose(int descriptor);
+#ifdef __cplusplus
+}
+#endif
+
+#ifndef UPDATE_CHECK_USE_SCEHTTP
+
+/* libcurl with OpenSSL, verifying against the console's certificate list. console_curl.c makes
+ * PacBrew's archives work in a native title; the options are the ones found necessary on the
+ * console. A fresh handle per check: the check runs once per launch. */
+
+#include "console_curl.h"
+
+#include <curl/curl.h>
+#include <pthread.h>
+
+enum
+{
+    update_check_timeout_ms = 5000
+};
+
+typedef struct update_check_sink
+{
+    char *body;
+    size_t capacity;
+    size_t used;
+    int overflow;
+} update_check_sink;
+
+static pthread_once_t update_check_curl_once = PTHREAD_ONCE_INIT;
+static CURLcode update_check_curl_started = CURLE_FAILED_INIT;
+
+static void update_check_curl_start(void)
+{
+    update_check_curl_started = curl_global_init(CURL_GLOBAL_DEFAULT);
+}
+
+static size_t update_check_on_body(char *data, size_t size, size_t count, void *user)
+{
+    update_check_sink *sink = (update_check_sink *)user;
+    const size_t bytes = size * count;
+    if (bytes > sink->capacity - sink->used)
+    {
+        sink->overflow = 1;
+        return 0; /* anything but `bytes` ends the transfer */
+    }
+    memcpy(sink->body + sink->used, data, bytes);
+    sink->used += bytes;
+    return bytes;
+}
+
+static int update_check_curl_error(CURLcode code)
+{
+    return -(10000 + (int)code);
+}
+
+static int update_check_fetch(const char *url, const char *user_agent, char *body, size_t capacity,
+                              size_t *length, int *http_status)
+{
+    update_check_sink sink = {body, capacity, 0, 0};
+    long status = 0;
+    *length = 0;
+    *http_status = 0;
+
+    (void)pthread_once(&update_check_curl_once, update_check_curl_start);
+    if (update_check_curl_started != CURLE_OK)
+        return update_check_curl_error(update_check_curl_started);
+    CURL *easy = curl_easy_init();
+    if (easy == NULL)
+        return update_check_curl_error(CURLE_FAILED_INIT);
+
+    (void)curl_easy_setopt(easy, CURLOPT_URL, url);
+    (void)curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L); /* no signals on the console */
+    (void)curl_easy_setopt(easy, CURLOPT_USERAGENT, user_agent);
+    (void)curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "https");
+    (void)curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
+    (void)curl_easy_setopt(easy, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
+    (void)curl_easy_setopt(easy, CURLOPT_CAINFO, console_curl_ca_file());
+    (void)curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, (long)update_check_timeout_ms);
+    (void)curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 3L * update_check_timeout_ms);
+    (void)curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, update_check_on_body);
+    (void)curl_easy_setopt(easy, CURLOPT_WRITEDATA, &sink);
+
+    const CURLcode code = curl_easy_perform(easy);
+    (void)curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &status);
+    curl_easy_cleanup(easy);
+    *http_status = (int)status;
+    if (sink.overflow)
+        return UPDATE_CHECK_FETCH_TOO_LARGE;
+    if (code != CURLE_OK)
+        return update_check_curl_error(code);
+    *length = sink.used;
+    return 0;
+}
+
+#else /* UPDATE_CHECK_USE_SCEHTTP */
+
+/* The console's HTTPS: the system sceHttp and sceSsl services, with the system's certificate
+ * store. The sequence and option values follow apps where they are proven on hardware. Fails
+ * with 0x8095f00c on every public site once the app is elevated. */
 
 #ifdef __cplusplus
 extern "C"
@@ -555,9 +659,6 @@ extern "C"
     int sceHttpSendRequest(int request, const void *data, size_t size);
     int sceHttpGetStatusCode(int request, int *status);
     int sceHttpReadData(int request, void *data, size_t size);
-    int sceKernelOpen(const char *path, int flags, int mode);
-    int64_t sceKernelRead(int descriptor, void *buffer, size_t length);
-    int sceKernelClose(int descriptor);
 #ifdef __cplusplus
 }
 #endif
@@ -574,8 +675,8 @@ enum
     update_check_verify_flags = 0x01 | 0x04 | 0x08 | 0x10 | 0x20 | 0x80
 };
 
-static int update_check_sce_fetch(const char *url, const char *user_agent, char *body,
-                                  size_t capacity, size_t *length, int *http_status)
+static int update_check_fetch(const char *url, const char *user_agent, char *body, size_t capacity,
+                              size_t *length, int *http_status)
 {
     int pool = -1;
     int ssl = -1;
@@ -655,9 +756,11 @@ static int update_check_sce_fetch(const char *url, const char *user_agent, char 
     return 0;
 }
 
+#endif /* UPDATE_CHECK_USE_SCEHTTP */
+
 void update_check_run(const char *title_id, const char *installed, update_check_result *result)
 {
-    update_check_run_with(update_check_sce_fetch, title_id, installed, result);
+    update_check_run_with(update_check_fetch, title_id, installed, result);
 }
 
 int update_check_read_param(const char *path, char title_id[10], char content_version[12])

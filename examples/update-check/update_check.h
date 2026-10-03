@@ -4,8 +4,20 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Lets an app listed on https://homebrew.page tell its user that a newer
- * release exists. Copy update_check.h and update_check.c into your project;
- * they depend on nothing else in this repository.
+ * release exists. Copy update_check.h, update_check.c, console_curl.h and
+ * console_curl.c into your project; they depend on nothing else in this
+ * repository.
+ *
+ * Transport: libcurl with OpenSSL and the console's certificate list, which
+ * works sandboxed and elevated. Add to the Makefile:
+ *
+ *     PACBREW_PACKAGES += libcurl
+ *     APP_WRAP_SYMBOLS += fcntl
+ *
+ * Define UPDATE_CHECK_USE_SCEHTTP to use the system's sceHttp instead (no
+ * libcurl, no console_curl.c; sandboxed apps only: sceSsl rejects public
+ * certificates once an app is elevated). Define UPDATE_CHECK_NO_NETWORK to
+ * build only the parsing and decisions, for host tests.
  *
  *     update_check_result result;
  *     update_check_run_self(&result);            // on a worker thread
@@ -105,9 +117,10 @@ extern "C"
     const char *update_check_reason_text(update_check_reason reason);
 
 #ifndef UPDATE_CHECK_NO_NETWORK
-    /* The whole check through the console's own HTTPS (sceHttp), with certificate
-     * verification. Blocking for up to a few seconds per phase: call it from a worker thread,
-     * at most once per launch, and never make the app wait for it. */
+    /* The whole check over HTTPS (libcurl, or sceHttp with UPDATE_CHECK_USE_SCEHTTP), with
+     * certificate verification. A failed request sets platform_error: -(10000 + CURLcode) with
+     * libcurl, the sceHttp/sceSsl code otherwise. Blocking for up to a few seconds per phase:
+     * call it from a worker thread, at most once per launch, and never make the app wait. */
     void update_check_run(const char *title_id, const char *installed, update_check_result *result);
 
     /* The same for the running app: the title ID and contentVersion are read from

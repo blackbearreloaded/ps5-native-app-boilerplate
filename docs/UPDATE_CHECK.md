@@ -1,29 +1,43 @@
 # Update check
 
 An app listed on [homebrew.page](https://homebrew.page) can tell its user that
-a newer release exists. This optional example is that check: two files you
+a newer release exists. This optional example is that check: four files you
 copy into your project, and a small title that exercises them on a console.
 
 It asks the catalog one question, over HTTPS, about the running app only. It
-downloads nothing else, installs nothing, and works inside the normal app
-sandbox: no elevation and no loader service.
+downloads nothing else and installs nothing. The request goes through
+**libcurl** with OpenSSL and the console's certificate list, which works the
+same in the normal app sandbox and in an elevated app.
 
 ## Use it in your app
 
-Copy `examples/update-check/update_check.h` and `update_check.c` into your
-sources. They depend on nothing else in this repository and compile as C11 or
-as C++.
+Copy the four files from `examples/update-check/` into your sources:
 
-In an app built from this template that is one command, because every C and
-C++ file under `src/` is compiled automatically:
+| File | What it is |
+| --- | --- |
+| `update_check.h`, `update_check.c` | The check: address, request, JSON reader, decision |
+| `console_curl.h`, `console_curl.c` | What PacBrew's libcurl needs to run in a native title (see [The transport](#the-transport-libcurl-on-the-console)) |
+
+In an app built from this template every C and C++ file under `src/` is
+compiled automatically, so that is one command, plus two lines in the
+`Makefile` (or in your `.env`):
 
 ```bash
-cp examples/update-check/update_check.h examples/update-check/update_check.c src/
+cp examples/update-check/{update_check,console_curl}.{h,c} src/
 ```
 
-The copies build with `make` and pass `make lint` unchanged. In another
-project, add the two files to your build; they need only the console's own
-`libSceHttp`, `libSceSsl`, `libSceNet` and `libkernel`.
+```make
+PACBREW_PACKAGES += libcurl
+APP_WRAP_SYMBOLS += fcntl
+```
+
+The first line links PacBrew's libcurl 8.18.0 with OpenSSL 3.5.2, zlib, zstd
+and libpsl (downloaded and verified by the build). The second routes every
+`fcntl` call to `console_curl.c`. The copies build with `make` and pass
+`make lint` unchanged. They compile as C11 or as C++.
+
+Shipping an app with libcurl linked in means shipping those libraries'
+notices: see [Licences](#licences).
 
 ```cpp
 #include "update_check.h"
@@ -85,9 +99,11 @@ page specifies the file this check reads
 
 1. Build the address from the title ID. Anything that isn't four capital
    letters and five digits is refused before a request is made.
-2. `GET` it through the console's own `sceHttp`, with certificate verification
-   on (server, name, validity dates, known authority, SNI), no redirects, and a
-   `User-Agent` naming the app: `homebrew-update-check/1 (<TITLEID>)`.
+2. `GET` it with libcurl over HTTPS only, verifying the server's certificate
+   and name against the console's own certificate list, with no redirects,
+   HTTP/1.1, a 5-second connect limit (name lookup included) and 15 seconds in
+   all, and a `User-Agent` naming the app:
+   `homebrew-update-check/1 (<TITLEID>)`.
 3. Refuse an answer larger than 64 KiB, a status other than 200, and anything
    that isn't one complete JSON object.
 4. Read `status` and `content_version`. A reservation (`coming_soon`) and a
@@ -96,12 +112,66 @@ page specifies the file this check reads
 
 Everything read from the network is treated as hostile: lengths are checked,
 values are copied only into buffers that hold them, nesting is bounded, and an
-answer cut short in transit is refused as a whole. The `sceHttp` contexts are
-created for the request and destroyed after it, so the check leaves nothing
-running. It uses about 5 MiB while the request is in flight.
+answer cut short in transit is refused as a whole. The curl handle is created
+for the request and cleaned up after it; libcurl's global state is set up once,
+on the first check.
 
 `update_check_run_with` takes a transport of your own, for an app that already
 has an HTTP client, and is what the tests use.
+
+## The transport: libcurl on the console
+
+PacBrew's archives are built for the payload SDK's libc, not for a native
+title. They link, but four things stop them working on the console. Each is
+answered in `console_curl.c`, and each was found on hardware by ProsperoRadio
+(an elevated app) and ProsperoLichess (a sandboxed one):
+
+| Problem | Symptom without the fix | What `console_curl.c` does |
+| --- | --- | --- |
+| `getaddrinfo` and friends come from `libScePosixForWebKit`, a module a native title doesn't load | Crash at address 0 on the first name lookup | Defines `getaddrinfo`, `freeaddrinfo`, `gai_strerror`, `getnameinfo`, `gethostbyname` and `fnmatch` on `sceNetResolver` (IPv4) |
+| In the sandbox, the console's libc refuses `fcntl` on sockets with `EINVAL` | Every request fails: `curl 7: fcntl set CLOEXEC: Invalid argument`; sockets stay blocking | `__wrap_fcntl` (linked with `APP_WRAP_SYMBOLS += fcntl`): a refused close-on-exec request succeeds (a title never execs), and non-blocking mode goes through the console's own `SO_NBIO` socket option |
+| libc functions the archives ask for are missing, or link from `libScePosixForWebKit` (`isatty`, `mkstemp`) | Link errors, or a crash at address 0 | Small stand-ins; `gmtime_r` is a full implementation, because OpenSSL checks certificate dates with it |
+| No certificate store OpenSSL knows | `CURLE_SSL_CACERT_BADFILE` (77) | `console_curl_ca_file()`: the console's `CA_LIST.cer`, at `/system/common/cert/` when elevated or `/<sandbox word>/common/cert/` in the sandbox, passed as `CURLOPT_CAINFO` |
+
+Every handle also needs `CURLOPT_NOSIGNAL`. The same file serves any other
+libcurl use in your app: call `console_curl_ca_file()` for `CURLOPT_CAINFO`
+and keep the `fcntl` wrap.
+
+The build keeps every symbol of the app internal (`tooling/native/app-symbols.map`).
+Without that, the linker would publish the functions above as exports, because
+they replace system stubs, and the converter refuses exports.
+
+A failed request sets `result.platform_error` to `-(10000 + CURLcode)`:
+`-10007` is "couldn't connect", `-10028` a timeout, `-10060` a certificate the
+list doesn't vouch for. `curl_easy_strerror(-error - 10000)` gives the text; the
+example title logs it.
+
+### Without libcurl: `UPDATE_CHECK_USE_SCEHTTP`
+
+Built with `UPDATE_CHECK_USE_SCEHTTP` defined, the check uses the console's own
+`sceHttp` and `sceSsl` instead, needs no PacBrew package, no `fcntl` wrap and no
+`console_curl.c`, and adds nothing to the app's size. That transport has also
+run on hardware (see the first run below), with one limit: once an app is
+elevated, `sceSsl` rejects every public site with `0x8095f00c`. Use it only in an
+app that never elevates. `UPDATE_CHECK_NO_NETWORK` leaves out the transport
+altogether (the host tests use it).
+
+### Licences
+
+libcurl and its dependencies are linked statically. An app that ships with them
+must carry each one's copyright line and licence text, for example in its
+`THIRD_PARTY_NOTICES.md`:
+
+| Component | Version in PacBrew v0.40.2 | Licence |
+| --- | --- | --- |
+| libcurl | 8.18.0 | curl licence (MIT/X derivative) |
+| OpenSSL | 3.5.2 | Apache License 2.0 |
+| zlib | 1.3.2 | zlib licence |
+| zstd | 1.5.6 | BSD-3-Clause (dual-licensed with GPL-2.0) |
+| libpsl | 0.21.5 | MIT; its built-in Public Suffix List data is MPL-2.0 |
+
+The PacBrew prefix doesn't include these texts: take them from each project's
+release of the version above.
 
 ## The example title
 
@@ -149,7 +219,9 @@ catalog; the example title does that.
 
 ## Console validation
 
-Run once on a PS5 on 2026-10-02 (the example title built with
+### First run: the `sceHttp` transport
+
+Run once on a PS5 on 2026-10-02, before the switch to libcurl (the example title built with
 `UPDATE_CHECK_RUN_TAG=c2 UPDATE_CHECK_EXIT_AFTER=60`, `eboot.bin` SHA-256
 `ab1dde8bec0fde046bcd26ec0a0dc02d2ecccbde6eaa8fe00c1017594ae6a1fe`), installed as a folder under `/data/homebrew` and registered by
 ShadowMountPlus. The console's firmware version wasn't recorded in this run.

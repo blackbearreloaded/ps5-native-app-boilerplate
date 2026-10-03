@@ -133,6 +133,16 @@ pacbrew_archives=()
 [[ -z ${PACBREW_INCLUDE_PATHS:-} ]] || read -r -a pacbrew_includes <<< "$PACBREW_INCLUDE_PATHS"
 [[ -z ${PACBREW_STATIC_ARCHIVES:-} ]] || read -r -a pacbrew_archives <<< "$PACBREW_STATIC_ARCHIVES"
 
+# Link-time wrappers: each symbol S resolves to the app's __wrap_S, and
+# __real_S to the original (for example fcntl, which libcurl needs wrapped).
+wrap_options=()
+for symbol in ${APP_WRAP_SYMBOLS:-}; do
+    [[ $symbol =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+        echo "invalid wrap symbol: $symbol" >&2; exit 2;
+    }
+    wrap_options+=("--wrap=$symbol")
+done
+
 pacbrew_cflags=()
 pacbrew_libs=()
 if (( ${#pacbrew_packages[@]} > 0 || ${#pacbrew_includes[@]} > 0 || ${#pacbrew_archives[@]} > 0 )); then
@@ -227,7 +237,7 @@ if [[ -n ${pacbrew_root:-} ]]; then
     done < <(find "$pacbrew_root" -type f \( -name '*.a' -o -name '*.so' \) -print0 | sort -z)
 fi
 ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" -T "$native/ps5-pie.ld" --eh-frame-hdr \
-    --version-script "$native/app-symbols.map" \
+    "${wrap_options[@]}" --version-script "$native/app-symbols.map" \
     -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
     --as-needed "$sdk_root"/target/lib/*.so
 ninja_inputs=("$build/llvm-pie.elf" "$tool" "$sdk_root"/target/lib/*.so)
