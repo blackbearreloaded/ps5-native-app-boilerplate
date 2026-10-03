@@ -132,10 +132,19 @@ answered in `console_curl.c`, and each was found on hardware by ProsperoRadio
 | In the sandbox, the console's libc refuses `fcntl` on sockets with `EINVAL` | Every request fails: `curl 7: fcntl set CLOEXEC: Invalid argument`; sockets stay blocking | `__wrap_fcntl` (linked with `APP_WRAP_SYMBOLS += fcntl`): a refused close-on-exec request succeeds (a title never execs), and non-blocking mode goes through the console's own `SO_NBIO` socket option |
 | libc functions the archives ask for are missing, or link from `libScePosixForWebKit` (`isatty`, `mkstemp`) | Link errors, or a crash at address 0 | Small stand-ins; `gmtime_r` is a full implementation, because OpenSSL checks certificate dates with it |
 | No certificate store OpenSSL knows | `CURLE_SSL_CACERT_BADFILE` (77) | `console_curl_ca_file()`: the console's `CA_LIST.cer`, at `/system/common/cert/` when elevated or `/<sandbox word>/common/cert/` in the sandbox, passed as `CURLOPT_CAINFO` |
+| curl's sockets stay blocking | The answer arrives, then the call doesn't return until the server closes the idle connection (400 s with homebrew.page); large downloads are slow | `console_curl_setup()` sets the console's `SO_NBIO` option on every socket through `CURLOPT_SOCKOPTFUNCTION` |
 
-Every handle also needs `CURLOPT_NOSIGNAL`. The same file serves any other
-libcurl use in your app: call `console_curl_ca_file()` for `CURLOPT_CAINFO`
-and keep the `fcntl` wrap.
+**Call `console_curl_setup(easy)` on every curl handle**, right after
+`curl_easy_init()`. It sets `CURLOPT_NOSIGNAL`, `CURLOPT_CAINFO` and the socket
+callback, and with the `fcntl` wrap that is all any other libcurl use in your
+app needs. An app with a socket callback of its own calls
+`console_curl_nonblocking(socket)` from it.
+
+The last row was found here, on the console: the `fcntl` wrap alone left the
+sockets blocking in this title, and each check took 400 seconds to return
+after an answer that had arrived in 160 ms. Why the wrap wasn't enough wasn't
+established; the example title now logs a socket probe (`sockets ...`) at
+start for the next run.
 
 The build keeps every symbol of the app internal (`tooling/native/app-symbols.map`).
 Without that, the linker would publish the functions above as exports, because
@@ -198,6 +207,7 @@ Two build definitions are for scripted console runs:
 | --- | --- |
 | `UPDATE_CHECK_RUN_TAG=<word>` | Printed in the first line, to tell runs apart |
 | `UPDATE_CHECK_EXIT_AFTER=<seconds>` | The title ends itself that long after reporting, through `sceSystemServiceLoadExec("exit")`. Without it the title stays up until it is closed from the home screen. |
+| `UPDATE_CHECK_CURL_TRACE` | libcurl's own account of each step (lookup, connect, TLS, certificate) goes to the kernel log as `UPDATE-CHECK-CURL:` lines with the time since the process started. Headers and bodies are left out. |
 
 ```bash
 APP_DEFINITIONS="UPDATE_CHECK_RUN_TAG=run1 UPDATE_CHECK_EXIT_AFTER=30" make update-check-example
@@ -218,6 +228,47 @@ API answer. Host tests can't establish that the console's HTTPS reaches the
 catalog; the example title does that.
 
 ## Console validation
+
+### libcurl
+
+Run on a PS5 on 2026-10-02 (the example title built with
+`UPDATE_CHECK_RUN_TAG=curl3 UPDATE_CHECK_EXIT_AFTER=20 UPDATE_CHECK_CURL_TRACE`,
+`eboot.bin` SHA-256
+`789dc206b927dd6ca58ffd6e8517c3a6e906f8b718c622f2a4bae3bd785502c7`), installed
+as a folder under `/data/homebrew` and registered by ShadowMountPlus, in the
+title's own sandbox with no elevation. The console's firmware version wasn't
+recorded.
+
+```text
+UPDATE-CHECK: start tag=curl3 host=homebrew.page transport=libcurl
+UPDATE-CHECK: curl=8.18.0 ca=/FB7DAjsvgd/common/cert/CA_LIST.cer
+UPDATE-CHECK: self installed=01.000.000 state=unknown reason=not-listed http=404 error=0x00000000 available=- version=- page=- ms=193
+UPDATE-CHECK: PPSA99002 installed=01.000.000 state=update-available reason=ok http=200 error=0x00000000 available=01.000.070 version=01.000.070 page=https://homebrew.page/app/PPSA99002/ ms=159
+UPDATE-CHECK: PPSA99002 installed=99.999.999 state=up-to-date reason=ok http=200 error=0x00000000 available=01.000.070 version=01.000.070 page=https://homebrew.page/app/PPSA99002/ ms=158
+UPDATE-CHECK: PPSA99009 installed=01.000.000 state=unknown reason=not-available http=200 error=0x00000000 available=- version=- page=- ms=147
+UPDATE-CHECK: PPSA00000 installed=01.000.000 state=unknown reason=not-listed http=404 error=0x00000000 available=- version=- page=- ms=180
+UPDATE-CHECK: done requests=5 answered=5
+```
+
+| Checked | Result |
+| --- | --- |
+| The catalog is reachable with libcurl and the console's certificate list | Yes: five answers, 147 to 193 ms each, each with its own name lookup, TLS 1.3 handshake and handle |
+| The certificate is verified | Yes: the trace shows `SSL certificate verified via OpenSSL` against `CA_LIST.cer` at the sandbox path, and the name matched |
+| Each kind of answer is decided correctly | Update available, up to date, coming soon, and not listed, as in the first run |
+| The title ends itself | Yes, through `sceSystemServiceLoadExec("exit")`: the kernel log shows `Kill for LoadExec ... => 0` |
+| The console afterwards | Services answering, installed files unchanged two minutes later |
+
+Two earlier runs the same day did not pass, and are why
+`console_curl_setup()` exists. In the first, another title was started on the
+console twelve seconds in, which closed this one before it had reported. In
+the second, traced, every request was answered in about 160 ms and then
+blocked for 400 seconds: the socket was still blocking (see
+[The transport](#the-transport-libcurl-on-the-console)). That title had to be
+closed from the home screen.
+
+Not exercised on hardware: the libcurl transport in an elevated app (other
+apps of ours use the same setup elevated), a failing network, an oversized
+answer, and calling the check from a worker thread beside a running renderer.
 
 ### First run: the `sceHttp` transport
 

@@ -588,6 +588,39 @@ static int update_check_curl_error(CURLcode code)
     return -(10000 + (int)code);
 }
 
+#ifdef UPDATE_CHECK_CURL_TRACE
+/* Diagnostics: libcurl's own account of each step, in the kernel log with the time since the
+ * process started. Headers and bodies are left out. */
+#include <stdio.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+    int sceKernelDebugOutText(int channel, const char *text);
+    uint64_t sceKernelGetProcessTime(void);
+#ifdef __cplusplus
+}
+#endif
+
+static int update_check_on_trace(CURL *easy, curl_infotype type, char *data, size_t size,
+                                 void *user)
+{
+    char line[256];
+    (void)easy;
+    (void)user;
+    if (type != CURLINFO_TEXT)
+        return 0;
+    while (size > 0 && (data[size - 1] == '\n' || data[size - 1] == '\r'))
+        --size;
+    (void)snprintf(line, sizeof(line), "UPDATE-CHECK-CURL: %llu ms %.*s\n",
+                   (unsigned long long)(sceKernelGetProcessTime() / 1000u),
+                   (int)(size < 200 ? size : 200), data);
+    (void)sceKernelDebugOutText(0, line);
+    return 0;
+}
+#endif
+
 static int update_check_fetch(const char *url, const char *user_agent, char *body, size_t capacity,
                               size_t *length, int *http_status)
 {
@@ -603,17 +636,20 @@ static int update_check_fetch(const char *url, const char *user_agent, char *bod
     if (easy == NULL)
         return update_check_curl_error(CURLE_FAILED_INIT);
 
+    console_curl_setup(easy); /* no signals, the console's CA list, non-blocking sockets */
     (void)curl_easy_setopt(easy, CURLOPT_URL, url);
-    (void)curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L); /* no signals on the console */
     (void)curl_easy_setopt(easy, CURLOPT_USERAGENT, user_agent);
     (void)curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "https");
     (void)curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
     (void)curl_easy_setopt(easy, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
-    (void)curl_easy_setopt(easy, CURLOPT_CAINFO, console_curl_ca_file());
     (void)curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, (long)update_check_timeout_ms);
     (void)curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, 3L * update_check_timeout_ms);
     (void)curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, update_check_on_body);
     (void)curl_easy_setopt(easy, CURLOPT_WRITEDATA, &sink);
+#ifdef UPDATE_CHECK_CURL_TRACE
+    (void)curl_easy_setopt(easy, CURLOPT_DEBUGFUNCTION, update_check_on_trace);
+    (void)curl_easy_setopt(easy, CURLOPT_VERBOSE, 1L);
+#endif
 
     const CURLcode code = curl_easy_perform(easy);
     (void)curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &status);

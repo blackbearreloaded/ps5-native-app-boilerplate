@@ -15,7 +15,10 @@
 #ifndef UPDATE_CHECK_USE_SCEHTTP
 #include "../console_curl.h"
 
+#include <cerrno>
 #include <curl/curl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #define EXAMPLE_TRANSPORT "libcurl"
 #else
 #define EXAMPLE_TRANSPORT "sceHttp"
@@ -181,6 +184,25 @@ int main()
         std::array<char, 220> line{};
         (void)std::snprintf(line.data(), line.size(), "curl=%s ca=%s",
                             curl_version_info(CURLVERSION_NOW)->version, console_curl_ca_file());
+        emit(line.data());
+
+        // What the console answers to curl's way of making a socket non-blocking, and to its own.
+        const int probe = socket(AF_INET, SOCK_STREAM, 0);
+        errno = 0;
+        const int set = fcntl(probe, F_SETFL, O_NONBLOCK);
+        const int set_errno = errno;
+        int on = 0;
+        socklen_t length = sizeof(on);
+        (void)getsockopt(probe, SOL_SOCKET, 0x1200, &on, &length);
+        const int own = console_curl_nonblocking(probe);
+        int after = 0;
+        length = sizeof(after);
+        (void)getsockopt(probe, SOL_SOCKET, 0x1200, &after, &length);
+        (void)close(probe);
+        (void)std::snprintf(line.data(), line.size(),
+                            "sockets fcntl-nonblock=%d errno=%d nbio-after-fcntl=%d so-nbio=%d "
+                            "nbio-after=%d",
+                            set, set_errno, on, own, after);
         emit(line.data());
     }
 #endif

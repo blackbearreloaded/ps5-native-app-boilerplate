@@ -62,8 +62,9 @@ hostname verification in a distributed application.
 
 For HTTPS with libcurl, take `console_curl.h` and `console_curl.c` from the
 [update check](UPDATE_CHECK.md#the-transport-libcurl-on-the-console), add
-`PACBREW_PACKAGES += libcurl` and `APP_WRAP_SYMBOLS += fcntl`, set
-`CURLOPT_NOSIGNAL` and pass `console_curl_ca_file()` as `CURLOPT_CAINFO`. Its
+`PACBREW_PACKAGES += libcurl` and `APP_WRAP_SYMBOLS += fcntl`, and call
+`console_curl_setup(easy)` on every handle (no signals, the console's
+certificate list, non-blocking sockets). Its
 `update_check_fetch` function is a complete GET. `APP_WRAP_SYMBOLS` takes any
 list of symbols: each `S` then resolves to your `__wrap_S`, and `__real_S` to
 the original.

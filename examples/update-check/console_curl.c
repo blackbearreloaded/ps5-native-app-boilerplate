@@ -68,17 +68,41 @@ const char *console_curl_ca_file(void)
     return console_curl_ca_path;
 }
 
+/* ---- Per-handle setup ---------------------------------------------------------------------- */
+
+enum
+{
+    CONSOLE_SO_NBIO = 0x1200 /* the console's own non-blocking socket option */
+};
+
+int console_curl_nonblocking(int socket)
+{
+    const int on = 1;
+    return setsockopt(socket, SOL_SOCKET, CONSOLE_SO_NBIO, &on, sizeof(on));
+}
+
+static int console_curl_on_socket(void *user, curl_socket_t socket, curlsocktype purpose)
+{
+    (void)user;
+    (void)purpose;
+    /* Keep going if it fails: the transfer still works, only slowly. */
+    (void)console_curl_nonblocking(socket);
+    return CURL_SOCKOPT_OK;
+}
+
+void console_curl_setup(CURL *easy)
+{
+    (void)curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
+    (void)curl_easy_setopt(easy, CURLOPT_CAINFO, console_curl_ca_file());
+    (void)curl_easy_setopt(easy, CURLOPT_SOCKOPTFUNCTION, console_curl_on_socket);
+}
+
 /* ---- fcntl on sockets ---------------------------------------------------------------------- */
 
 /* In a sandboxed title the console's libc refuses fcntl on sockets with EINVAL.
  * curl then fails every connect ("fcntl set CLOEXEC: Invalid argument") and its
  * sockets stay blocking. Linked with --wrap=fcntl, every fcntl call in the app
  * and the archives comes here; only a refused call is treated as a socket. */
-
-enum
-{
-    CONSOLE_SO_NBIO = 0x1200 /* the console's own non-blocking socket option */
-};
 
 extern int __real_fcntl(int descriptor, int command, ...);
 
