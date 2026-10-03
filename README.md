@@ -33,14 +33,14 @@ on 6.02 and 12.70; validate the exact artifact on other target environments
 before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
-An opt-in [elevation protocol example](docs/SANDBOX_ELEVATION.md) submits an
-exact-title helper to an already-running loopback elfldr, requests the filesystem
-capability, and verifies a write under `/data` after an explicit success reply.
-Its guarded, owned-reference backend is adapted from
-[PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon);
-the former unreferenced root-vnode pointer replacement has been removed. The
-versioned client protocol still supports only filesystem access and is separate
-from the default sandboxed skeleton.
+An opt-in [elevation example](docs/SANDBOX_ELEVATION.md) is a cooperative client
+for the official
+[PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon).
+It publishes Lapy's `/download0/elevate_proc` request and returns success only
+after a real `/data` write/read proof. The former raw-pointer helper and the
+later copied Lapy backend have both been removed: this repository packages no
+elevation ELF or kernel-manipulation code. The default skeleton remains
+sandboxed.
 
 An opt-in [update check](#update-check) lets an app listed on
 [homebrew.page](https://homebrew.page) tell its user that a newer release
@@ -60,7 +60,7 @@ and compare content versions. It needs no elevation and installs nothing.
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
 | Root skeleton | C++20 graphical Hello World with RAII, bounded views, unique ownership, CPU-rendered text, shapes, and packaged data |
 | Update check | Optional [`examples/update-check`](examples/update-check): tells the users of an app listed on homebrew.page that a newer release exists |
-| Sandbox elevation | Optional exact-title helper with Lapy-derived move-only vnode-reference ownership and fail-closed runtime checks |
+| Sandbox elevation | Optional cooperative client for an independently built, unmodified upstream Lapy daemon |
 | Validation | C++ unit tests, host integration tests, prerequisites, and static ELF/FSELF inspection |
 
 ## Quick start

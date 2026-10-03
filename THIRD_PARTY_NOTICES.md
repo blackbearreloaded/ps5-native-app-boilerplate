@@ -16,7 +16,7 @@
 | [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
-| [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Guarded owned-root elevation design and move-only donor transaction |
+| [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | External owned-root elevation daemon and cooperative request contract |
 
 ## Native build dependencies
 
@@ -47,22 +47,16 @@ SHA-256 `65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c`.
 It remains under ignored `.deps/test/`, retains its BSD-3-Clause license, and
 is not linked into any PS5 application, runtime, or package artifact.
 
-## Optional PS5-Lapy-JB-Daemon elevation code
+## Optional PS5-Lapy-JB-Daemon integration
 
-The guarded owned-root backend under `examples/sandbox-elevation/payload/` is
-adapted from
+The sandbox-elevation example implements only the cooperative application
+contract documented by
 [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) at
 commit `5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`. Credit belongs to Arksama
-(Team PHU), mpereiraesaa, and the Lapy contributors. The adaptation keeps the
-reference implementation's move-only donor transaction and runtime vnode
-reference probe, integrates the boilerplate's ELV1 client, and adds a mandatory
-post-transfer reference-balance gate.
-
-The upstream code is MIT licensed, Copyright (c) 2026 Arksama (Team PHU). Its
-license and disclaimer are preserved in
-`examples/sandbox-elevation/payload/LAPY_LICENSE.txt`. Adapted source files also
-carry this repository's GPL-3.0-or-later notice; the MIT terms permit that
-redistribution while the upstream copyright and permission notice remain.
+(Team PHU), mpereiraesaa, and the Lapy contributors. Lapy remains an external,
+independently built component; this repository does not redistribute its
+kernel source or ELF. Obtain it from upstream and follow the license included
+there.
 
 ## Optional PacBrew dependencies
 
