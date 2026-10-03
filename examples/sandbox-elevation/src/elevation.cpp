@@ -21,8 +21,8 @@ namespace
 {
 constexpr char request_path[] = "/download0/elevate_proc";
 constexpr char result_path[] = "/download0/lapy_owned_result";
-constexpr unsigned acknowledgement_polls = 200;
-constexpr useconds_t acknowledgement_interval_us = 50000;
+constexpr unsigned elevation_polls = 200;
+constexpr useconds_t elevation_poll_interval_us = 50000;
 
 class File
 {
@@ -101,19 +101,6 @@ bool publish_request(pid_t pid) noexcept
     return true;
 }
 
-bool wait_for_consumption() noexcept
-{
-    for (unsigned poll = 0; poll < acknowledgement_polls; ++poll)
-    {
-        errno = 0;
-        if (access(request_path, F_OK) != 0)
-            return errno == ENOENT;
-        (void)usleep(acknowledgement_interval_us);
-    }
-    errno = ETIMEDOUT;
-    return false;
-}
-
 bool verify_data(pid_t pid, int &open_error) noexcept
 {
     std::array<char, 80> path{};
@@ -136,6 +123,22 @@ bool verify_data(pid_t pid, int &open_error) noexcept
         actual == token;
     (void)unlink(path.data());
     return passed;
+}
+
+bool wait_for_elevation(pid_t pid, int &open_error, bool &proof_failed) noexcept
+{
+    for (unsigned poll = 0; poll < elevation_polls; ++poll)
+    {
+        if (verify_data(pid, open_error))
+            return true;
+        if (open_error == 0)
+        {
+            proof_failed = true;
+            return false;
+        }
+        (void)usleep(elevation_poll_interval_us);
+    }
+    return false;
 }
 
 void report_result(int descriptor, bool data_ok, int open_error) noexcept
@@ -163,14 +166,9 @@ elevation::Status elevation::request(Capability capability) noexcept
     const pid_t pid = getpid();
     if (pid <= 1 || !publish_request(pid))
         return Status::transport_error;
-    if (!wait_for_consumption())
-    {
-        report_result(result.get(), false, ETIMEDOUT);
-        return Status::timeout;
-    }
-
     int open_error = 0;
-    const bool data_ok = verify_data(pid, open_error);
+    bool proof_failed = false;
+    const bool data_ok = wait_for_elevation(pid, open_error, proof_failed);
     report_result(result.get(), data_ok, open_error);
-    return data_ok ? Status::ok : Status::apply_failed;
+    return data_ok ? Status::ok : proof_failed ? Status::apply_failed : Status::timeout;
 }

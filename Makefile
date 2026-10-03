@@ -76,7 +76,7 @@ test-elevation:
 	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -idirafter .deps/native/ps5-payload-sdk/target/include \
 		tests/test_elevation.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_elevation
 	@build/tests/test_elevation
-	@printf '%s\n' 'Lapy cooperative request, acknowledgement, and /data proof checks passed.'
+	@printf '%s\n' 'Lapy cooperative request, data-ready polling, and proof checks passed.'
 
 test-update-check:
 	@mkdir -p build/tests

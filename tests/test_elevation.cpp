@@ -21,10 +21,9 @@ struct State
     bool result_open_fails{};
     bool prepare_fails{};
     bool request_open_fails{};
-    bool data_open_fails{};
     bool corrupt_read{};
-    bool acknowledge{true};
-    unsigned access_calls{};
+    unsigned data_open_failures{};
+    unsigned data_open_calls{};
     unsigned sleeps{};
     unsigned prepare_calls{};
     unsigned closes{};
@@ -41,7 +40,6 @@ State state;
 void reset()
 {
     state = {};
-    state.acknowledge = true;
 }
 
 bool starts_with(const char *value, std::string_view prefix)
@@ -96,7 +94,8 @@ extern "C"
         }
         if (test::starts_with(path, "/data/.lapy_probe_"))
         {
-            if (test::state.data_open_fails)
+            ++test::state.data_open_calls;
+            if (test::state.data_open_calls <= test::state.data_open_failures)
             {
                 errno = EACCES;
                 return -1;
@@ -168,19 +167,6 @@ extern "C"
         return 0;
     }
 
-    int access(const char *path, int mode) noexcept
-    {
-        assert(std::strcmp(path, "/download0/elevate_proc") == 0);
-        assert(mode == F_OK);
-        ++test::state.access_calls;
-        if (test::state.acknowledge && test::state.access_calls >= 2)
-        {
-            errno = ENOENT;
-            return -1;
-        }
-        return 0;
-    }
-
     int usleep(useconds_t)
     {
         ++test::state.sleeps;
@@ -194,6 +180,7 @@ int main()
     using elevation::Status;
 
     test::reset();
+    test::state.data_open_failures = 1;
     assert(elevation::request(Capability::filesystem) == Status::ok);
     assert(test::state.prepare_calls == 1);
     assert(test::state.request == "{\"PID\":4242}\n");
@@ -201,7 +188,7 @@ int main()
     assert(test::state.renamed_to == "/download0/elevate_proc");
     assert(test::state.data == "LAPYOWN\n");
     assert(test::state.result == "DATA_OK=1 OPEN_ERRNO=0\n");
-    assert(test::state.access_calls == 2 && test::state.sleeps == 1);
+    assert(test::state.data_open_calls == 2 && test::state.sleeps == 1);
 
     test::reset();
     assert(elevation::request(static_cast<Capability>(2)) == Status::unsupported_capability);
@@ -221,14 +208,9 @@ int main()
     assert(elevation::request(Capability::filesystem) == Status::transport_error);
 
     test::reset();
-    test::state.acknowledge = false;
+    test::state.data_open_failures = 1000;
     assert(elevation::request(Capability::filesystem) == Status::timeout);
-    assert(test::state.access_calls == 200 && test::state.sleeps == 200);
-    assert(test::state.result == "DATA_OK=0 OPEN_ERRNO=" + std::to_string(ETIMEDOUT) + "\n");
-
-    test::reset();
-    test::state.data_open_fails = true;
-    assert(elevation::request(Capability::filesystem) == Status::apply_failed);
+    assert(test::state.data_open_calls == 200 && test::state.sleeps == 200);
     assert(test::state.result == "DATA_OK=0 OPEN_ERRNO=" + std::to_string(EACCES) + "\n");
 
     test::reset();

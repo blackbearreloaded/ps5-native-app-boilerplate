@@ -38,11 +38,16 @@ client follows Lapy's cooperative contract:
    shape required by Lapy.
 3. Atomically publishes `{"PID":<getpid()>}` as
    `/download0/elevate_proc`.
-4. Waits up to ten seconds for daemon consumption.
-5. Creates, writes, seeks, reads, compares, and removes a PID-specific probe
-   under `/data`.
-6. Reports `DATA_OK` and `OPEN_ERRNO` through the preopened result descriptor.
-7. Returns `Status::ok` only after the `/data` proof succeeds.
+4. Polls for elevation by creating, writing, seeking, reading, comparing, and
+   removing a PID-specific probe under `/data`, for at most ten seconds.
+5. Reports `DATA_OK` and `OPEN_ERRNO` through the preopened result descriptor.
+6. Returns `Status::ok` only after the `/data` proof succeeds.
+
+The client does not use disappearance of `elevate_proc` as its success signal.
+Path visibility can change with the root transition, and request consumption is
+not itself proof of elevation. The real `/data` round trip is the stronger and
+portable completion condition; Lapy still removes the request and validates the
+preopened result file.
 
 `downloadDataSize` must be positive in `sce_sys/param.json`. A missing daemon,
 daemon rejection, or held transaction never authorizes privileged work. Keep
@@ -119,8 +124,8 @@ make sandbox-elevation-ffpfsc
 ```
 
 The first target tests the application-side credential preparation, atomic
-request publication, partial writes, acknowledgement timeout, `/data` proof,
-and result reporting. The second builds the `PPSA99790` proof title without an
+request publication, partial writes, data-ready timeout, `/data` proof, and
+result reporting. The second builds the `PPSA99790` proof title without an
 elevation payload. Host tests cannot establish kernel or firmware safety;
 hardware lifecycle testing belongs to the exact upstream Lapy ELF.
 
