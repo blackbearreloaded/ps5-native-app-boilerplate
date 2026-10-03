@@ -44,6 +44,13 @@ An opt-in [update check](#update-check) lets an app listed on
 exists: two standalone files that ask the catalog over the console's own HTTPS
 and compare content versions. It needs no elevation and installs nothing.
 
+For a real interface (menus, lists, dialogs, settings screens), use the
+companion [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui):
+an OpenGL kit built on this template, with about a hundred reusable
+components, thirty themes, finished screens and a PC preview. This template
+stays a small foundation; [User interface](docs/USER_INTERFACE.md) says how
+the two fit together.
+
 ## What is included
 
 | Feature | Included implementation |
@@ -509,6 +516,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
+| [User interface](docs/USER_INTERFACE.md) | Where the skeleton's CPU renderer stops, and the companion OpenGL kit (components, themes, screens) for real interfaces |
 | [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
 | [Update check](docs/UPDATE_CHECK.md) | Catalog update check for listed apps: the four files, the rules, the example title |
 | [libcurl](docs/CURL.md) | HTTPS with libcurl and OpenSSL: setup, what the console needs, large downloads, elevated apps, troubleshooting |
@@ -520,7 +528,10 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 This project builds a directory-style homebrew application and optional
 filesystem images. It does not create a signed retail PKG/FPKG, automate an
 exploit, alter console configuration, or bundle Sony files. GPU decoding and a
-general-purpose C library are outside this foundation.
+general-purpose C library are outside this foundation. So is a user-interface
+toolkit: that lives in the separate
+[ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui)
+project, which is built on this one.
 
 ## Contributing
 

@@ -101,6 +101,15 @@ renderer, and audio—so a loader/import failure is distinguishable from an SDL
 subsystem failure. Keep the root boilerplate independent of SDL so developers
 who need only VideoOut do not inherit the dependency.
 
+## A graphical user interface
+
+The root app's CPU renderer is a proof of life, not a toolkit. For menus,
+lists, dialogs, forms and the rest, use the companion
+[ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui): an
+OpenGL 4.6 kit with reusable components, themes, sound and a PC preview. It
+is built on this template, so an app can start from it directly or take its
+kit into an existing project. See [User interface](USER_INTERFACE.md).
+
 ## Adding a native library
 
 Prefer a PacBrew module when available:
