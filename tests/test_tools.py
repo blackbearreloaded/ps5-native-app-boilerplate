@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import runpy
 import shutil
-import struct
 import subprocess
 import tempfile
 import unittest
@@ -20,20 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ToolTests(unittest.TestCase):
-    def test_elevation_helper_rejects_trailing_or_truncated_elf(self):
-        validate = runpy.run_path(str(ROOT / "tools/validate-elevation-helper.py"))["validate"]
-        data = bytearray(128)
-        data[:6] = b"\x7fELF\x02\x01"
-        struct.pack_into("<Q", data, 40, 64)
-        struct.pack_into("<HH", data, 58, 64, 1)
-        validate(data)
-        for invalid in (b"", data[:-1], data + b"extra"):
-            with self.assertRaises(ValueError):
-                validate(invalid)
-        struct.pack_into("<Q", data, 64 + 32, 129)
-        with self.assertRaises(ValueError):
-            validate(data)
-
     def run_init(self, param, **values):
         environment = os.environ.copy()
         environment.update(values)

@@ -90,7 +90,7 @@ jobs:
       - name: Run host integration tests
         run: make test-integration
 
-      - name: Check elevation protocol and rollback
+      - name: Check Lapy cooperative elevation client
         run: make test-elevation
 
       - name: Build filesystem capability example

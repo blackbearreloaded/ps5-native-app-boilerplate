@@ -1,163 +1,190 @@
-# elfldr elevation protocol
+# Lapy sandbox elevation
 
-This optional example lets a native application request a named capability from
-a bundled helper ELF. It uses an already-running, compatible elfldr on loopback
-TCP port 9021. No elfldr or kstuff modifications are required.
+This optional example is a cooperative client for the official
+[PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon).
+The boilerplate does not contain, fork, or rebuild Lapy's kernel backend. It
+does not bundle an elevation ELF. Run an upstream Lapy owned-root daemon, then
+launch the application.
 
-The only implemented capability is `elevation::Capability::filesystem` (ID 1).
-The default boilerplate remains sandboxed.
+This replaces the removed boilerplate helpers. The original helper directly
+published unowned root-vnode pointers. A later local adaptation copied Lapy's
+kernel transaction into a per-app ELF. Both approaches are gone: kernel
+ownership and firmware support now have one upstream implementation and one
+upstream project to validate.
+
+Lapy currently documents completed console validation on firmware 12.02 only.
+Other SDK-supported versions are experimental even when runtime layout checks
+pass. Never fall back to a raw-pointer helper when Lapy rejects a target.
 
 ## Application API
 
-Compile `examples/sandbox-elevation/src/elevation.cpp` into your application and
+Compile `examples/sandbox-elevation/src/elevation.cpp` into the application and
 include `examples/sandbox-elevation/elevation.hpp`:
 
 ```cpp
 const auto result = elevation::request(elevation::Capability::filesystem);
 if (result == elevation::Status::ok)
 {
-    // Normal sceKernelOpen/read/write calls can now access /data.
+    // /data write/read was verified; privileged initialization may continue.
 }
 ```
 
-Call during single-threaded startup, before starting workers. Keep the process
-alive until the request completes. A second argument can override the default
-bundled helper path, `/app0/sandbox-elevator.elf`. Build and package the matching
-helper; an ELF compiled for an earlier protocol is incompatible.
+Call it once during single-threaded startup, before creating workers. The
+client follows Lapy's cooperative contract:
 
-The supplied helper accepts only `PPSA99790`. For another app, update
-`target_title_id` in `payload/main.cpp` together with the app's `param.json`,
-and rebuild. The PID in a request must also resolve to that title. A PID or
-title string is not authentication: this protocol assumes an owner-trusted
-payload environment, and the helper is not an arbitrary-process service.
+1. Preopens `/download0/lapy_owned_result` so it remains usable after the root
+   change.
+2. Calls native `seteuid(geteuid())` to give this process the private credential
+   shape required by Lapy.
+3. Atomically publishes `{"PID":<getpid()>}` as
+   `/download0/elevate_proc`.
+4. Polls for elevation by creating, writing, seeking, reading, comparing, and
+   removing a PID-specific probe under `/data`, for at most ten seconds.
+5. Reports `DATA_OK` and `OPEN_ERRNO` through the preopened result descriptor.
+6. Returns `Status::ok` only after the `/data` proof succeeds.
 
-## Transport and lifecycle
+The client does not use disappearance of `elevate_proc` as its success signal.
+Path visibility can change with the root transition, and request consumption is
+not itself proof of elevation. The real `/data` round trip is the stronger and
+portable completion condition; Lapy still removes the request and validates the
+preopened result file.
 
-1. The app opens `/app0/sandbox-elevator.elf` and streams its bytes to elfldr.
-2. elfldr consumes the ELF using its section-table extent and gives the existing
-   connection to the helper as stdin/stdout. The app keeps the socket open.
-3. The app sends `request` with its PID and one capability ID. The helper rejects
-   invalid headers, versions, kinds, statuses, capabilities, and target identity.
-4. After snapshotting the target, the helper replies `prepare`. The app calls
-   native `seteuid(geteuid())` and replies `prepared`. The helper verifies that
-   the same process now references a different credential with unchanged values.
-   Failure to obtain private credentials ends the request without elevation.
-5. The helper applies the filesystem profile to the private credential and
-   filesystem roots, then reads every changed field back. Failed updates trigger
-   restoration and verification of the original values.
-6. The helper sends one terminal `response` and exits. Only `Status::ok` lets the
-   example write, close, reopen, and byte-verify `/data/hello-from-sandbox.txt`
-   and `/data/PPSA99790-poc.txt`. These two example files are overwritten on each
-   successful run; the second includes a build tag and the application PID.
+`downloadDataSize` must be positive in `sce_sys/param.json`. A missing daemon,
+daemon rejection, or held transaction never authorizes privileged work. Keep
+the title alive after a timeout while inspecting the daemon log; if Lapy reports
+`daemon_held`, reboot the console before closing or retrying the title.
 
-There is one capability request per helper invocation. The helper exits after
-the response. The example calls the API once at startup; each additional API call
-launches another helper. Elevation remains with the app
-process until it exits, so no helper needs to wait for app closure.
+## Run the upstream daemon
 
-No additional listener, daemon, JSON parser, or runtime registration mechanism is
-needed. Diagnostics go to klog; stdout carries protocol bytes only.
-Each socket operation has a timeout,
-defaulting to five seconds. Tune `wire::io_timeout_us` in `protocol.hpp` and rebuild
-both endpoints for slower hardware. Partial transfers are handled; EOF, timeout,
-or interruption ends the attempt. There is no automatic resubmission.
+Pin, audit, build, and distribute Lapy separately from each application. Do
+not copy its donor or kernel source into an app repository. At the pinned
+upstream commit:
 
-The build checks that the helper ELF ends exactly at its section table and that
-all stored sections fit in the file. Extra ELF trailer bytes would otherwise be
-misinterpreted as protocol bytes by the helper. Do not append or independently
-postprocess the packaged ELF after this check.
+```bash
+git clone https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon.git
+cd PS5-Lapy-JB-Daemon
+git checkout 5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad
+PS5_PAYLOAD_SDK=/path/to/ps5-payload-sdk make check
+```
 
-## Version 1 wire format
+Lapy provides two suitable operating modes.
 
-Every message is exactly 24 bytes, little-endian. `protocol.hpp` is the shared
-definition and verifies its layout at compile time.
+### One-shot lifecycle validation
 
-| Offset | Type | Field |
-| --- | --- | --- |
-| 0 | u32 | Magic `0x31564c45` (bytes `ELV1`) |
-| 4 | u16 | ABI version `1` |
-| 6 | u16 | Message size `24` |
-| 8 | u32 | Kind: request `1`, prepare `2`, prepared `3`, response `4` |
-| 12 | u32 | Capability: filesystem `1` |
-| 16 | u32 | Positive application PID, at most `INT32_MAX` |
-| 20 | u32 | Status; request and prepare must use `0` |
+```bash
+python3 tools/build_owned_daemon.py \
+  --sdk /path/to/ps5-payload-sdk \
+  --logging-client /path/to/ps5log-client \
+  --title PPSA99790 \
+  --require-client-result
+```
 
-Replies echo the requested capability and PID. The client checks their header,
-identity, kind, and status before advancing. A success response before the
-preparation handshake is invalid. Requests carry no kernel pointers, firmware
-offsets, raw capability masks, or authority IDs.
+Replace `PPSA99790` with the application's exact title ID. Do not use a
+wildcard for one-shot mode.
 
-| Status | Value | Meaning |
-| --- | --- | --- |
-| `ok` | 0 | Update applied and verified |
-| `invalid_request` | 1 | Malformed message or unexpected phase |
-| `unsupported_version` | 2 | Incompatible ABI version |
-| `unsupported_capability` | 3 | Capability has no supported implementation |
-| `target_mismatch` | 4 | PID/title mismatch or process changed during preparation |
-| `unavailable` | 5 | Helper file, payload context, or required kernel state unavailable |
-| `prepare_failed` | 6 | Native credential preparation failed or was not verified |
-| `apply_failed` | 7 | Update failed; original values were restored and verified |
-| `rollback_failed` | 8 | Restoration could not be verified; process state is uncertain |
-| `transport_error` | 9 | Socket or transfer failed; the terminal result may have been lost |
-| `protocol_error` | 10 | Client received an invalid or mismatched reply |
+Send `build/owned_root_daemon/lapy-root-daemon.elf` to elfldr before launching
+the title. One invocation accepts one cooperative request, checks the client
+result, waits for title exit, verifies the root counter returned to its
+baseline, then exits. Reuse the built ELF for later invocations; do not rebuild
+it between cycles.
 
-After any nonzero result, skip elevated work and close the title. A lost reply
-does not prove the update was undone. The example reports the numeric status and
-remains idle for normal shell-mediated closure instead of polling `/data` forever.
+This is the preferred qualification mode because every run covers the full
+launch -> elevation -> `/data` proof -> title exit -> root-balance lifecycle.
 
-## Adding a capability
+### Resident service
 
-1. Assign a new, never-reused numeric ID in `Capability` and explicitly allow it
-   in `wire::validate`. IDs represent individual requests, not a bitmask.
-2. Add a handler and a case in `handle_request`'s capability switch. Keep privilege
-   policy inside the helper; callers must not supply raw credentials or addresses.
-3. Give the handler checked updates, verification, failure handling, and a focused
-   regression in `tests/test_elevation.cpp`. Validate its actual operation on the
-   intended firmware before claiming support.
-4. Document its effects and interaction with previously granted capabilities.
-   Retain version 1 only if the existing frame and handshake semantics are unchanged;
-   incompatible framing or semantics require a new version and matching endpoints.
+```bash
+python3 tools/build_owned_daemon.py \
+  --sdk /path/to/ps5-payload-sdk \
+  --logging-client /path/to/ps5log-client \
+  --service \
+  --require-client-result
+```
 
-An old helper explicitly rejects an unknown ID. The fixed-profile idea and native
-credential preparation are informed by
-[kstuff-lite PR #73](https://github.com/EchoStretch/kstuff-lite/pull/73).
-Its process-memory and debugging profiles are not implemented here.
+Send `build/owned_root_daemon-service/lapy-root-daemon.elf` to elfldr once per
+boot. It watches all `PPSA*` sandboxes and can serve successive cooperative
+apps. Run exactly one daemon. For an attended bounded test, invoke upstream's
+`tools/build_owned_daemon.py` with `--service --max-requests N`; add
+`--require-client-result` to require the application's `/data` proof.
 
-## Filesystem scope and validation
+The resident mode is convenient for many apps, but release qualification must
+still close every title and independently confirm final reference balance.
 
-The filesystem handler retains the proof's root/system-authority/full-capability
-recipe and also clears the saved group ID. It changes filesystem root/jail vnode
-references; it does not replace `cr_prison`. **Filesystem is the only exposed
-protocol capability, not an enforced filesystem-only privilege boundary.** This
-recipe grants broad process privileges; it does not restrict access to `/data`,
-remount read-only filesystems, or guarantee access to every path. Test the actual
-paths your application needs, including `/app0` and `/download0` after elevation.
+Lapy requires its documented `ps5log/1` client and server configuration. Treat
+`daemon_start`, `root_layout valid=1`, `roots_committed`,
+`donor_balance expected_two=1`, `request_result stage=complete error=0`, and a
+balanced final exit as required evidence. `daemon_held` is a failed run even if
+the console has not panicked.
 
-The SDK selects firmware offsets during payload startup and rejects unsupported
-firmware. Native same-UID credential preparation can also fail on a given loader
-or firmware; the helper refuses to edit a credential that did not change. External
-kernel updates cannot prevent the process being killed concurrently. Keep this
-operation at startup and do not close the title during the handshake.
+## Firmware 6.02 validation result
+
+On 2026-10-03, the exact upstream one-shot daemon at commit
+`5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad` was tested on firmware 6.02 with
+PS5 Payload SDK v0.40 (`13ccc2d5bf2ac396cdf5007c2b72493cb3d5c8bb`). The
+Lapy ELF SHA-256 was
+`3e1a101e21b4be242dd65146140985f745e21d8b82532340774800fc6930430a`.
+
+The uninterrupted quick run completed 50/50 functional cycles in 142.93
+seconds with 50 unique title PIDs. Every cycle had:
+
+- successful application `/data` write/read proof;
+- `request_result stage=complete error=0` and `client_result data_rw=1`;
+- a clean `daemon_result stage=complete error=0` and `ps5log/1` BYE;
+- root hold/use counters returning from the transferred `56/55` state to the
+  same `54/53` baseline after title exit; and
+- successful title close and healthy FTP, klog, and elfldr services.
+
+No kernel panic, double fault, or fatal kernel trap was captured. This is a
+functional lifecycle pass, not a production safety qualification: klog also
+captured 54 user-mode `SIGSEGV` exits from upstream `payload.elf` donor
+processes. Fifty-one faulted at `0x1b0`; three used ASLR addresses ending in
+`0x1b0`. Lapy's root-balance checks still passed, but any donor fault fails the
+strict criterion in this guide.
+
+Therefore firmware 6.02 remains unsupported for production use. Do not enable
+elevation by default on it, and do not patch a private copy of Lapy to hide the
+diagnostic. Resolve firmware-specific donor release behavior in the upstream
+project, then repeat this lifecycle gate. Upstream's documented 12.02 result is
+not evidence for other firmware.
+
+## Build and host tests
 
 ```bash
 make test-elevation
-make lint test
-make
 make sandbox-elevation-ffpfsc
 ```
 
-The image is `dist/PPSA99790.ffpfsc`. CI checks the host protocol/rollback regression
-and builds the example. Host tests mock native calls and inject partial writes;
-they cannot establish PS5 runtime compatibility.
+The first target tests the application-side credential preparation, atomic
+request publication, partial writes, data-ready timeout, `/data` proof, and
+result reporting. The second builds the `PPSA99790` proof title without an
+elevation payload. Host tests cannot establish kernel or firmware safety;
+hardware lifecycle testing belongs to the exact upstream Lapy ELF.
 
-The maintainer reported successful console tests of this versioned implementation
-on firmware **6.02 and 12.70** on 2026-09-29, using the existing elfldr-based setup.
-Exact loader versions were not recorded here; these results do not establish
-compatibility with every loader or firmware combination.
+## Migration policy for all boilerplate apps
 
-For future hardware regressions, check the success notification, both files' exact
-contents and current PID, normal title closure, and continued loader service health.
-The proof marker defaults to `tag=poc_run`; use
-`make sandbox-elevation-ffpfsc APP_DEFINITIONS=POC_RUN_TAG=my_run` to distinguish a
-new build from a previous run. Files remain after the app exits; their existence
-alone does not prove the latest request succeeded.
+1. Delete every copied or prebuilt `sandbox-elevator.elf`, root-pointer helper,
+   donor transaction, and application-local elevation daemon.
+2. Keep only the cooperative app client. Call it once before starting threads.
+3. Install or launch one independently versioned upstream Lapy build for the
+   console environment. Choose one-shot or resident mode operationally; apps do
+   not change between them.
+4. Proceed only after `Status::ok`. A request file disappearing is not success;
+   the app must verify `/data` access.
+5. Pin the Lapy commit, payload-SDK commit, logging client, loader, firmware,
+   and ELF hash in release records.
+6. Qualify each firmware/loader combination with repeated full lifecycle runs.
+   Any `daemon_held`, donor crash, root-count drift, title-close failure, loader
+   failure, or kernel panic invalidates the run.
+7. Update Lapy upstream for kernel behavior changes. Do not maintain another
+   kernel implementation in each app or in this template.
+
+## Credits and source reference
+
+The owned-reference design, daemon, donor transaction, runtime guards, and
+cooperative protocol belong to
+[mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon).
+Credit belongs to Arksama / Team PHU, mpereiraesaa, and the Lapy contributors.
+This integration was aligned with upstream commit
+[`5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/commit/5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad).
+Use Lapy under the license in its repository; no Lapy kernel source or binary is
+redistributed here.

@@ -1,288 +1,220 @@
 /*
- * ps5-native-app-boilerplate - Elevation protocol and failure-path regression.
+ * ps5-native-app-boilerplate - Lapy cooperative client regression.
  * Copyright (C) 2026 BlackBearReloaded
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include <algorithm>
 #include <cassert>
+#include <cerrno>
+#include <cstdarg>
+#include <cstring>
+#include <string>
+#include <string_view>
 #include <vector>
 
-// Exercise the actual client and helper without a console or kernel writes.
-#define main elevation_payload_main
-#include "../examples/sandbox-elevation/payload/main.cpp"
-#undef main
 #include "../examples/sandbox-elevation/src/elevation.cpp"
 
 namespace test
 {
-constexpr std::intptr_t base = static_cast<std::intptr_t>(UINT64_C(0xffff800000100000));
-std::array<std::uint8_t, 1024> memory{};
-int writes = 0;
-int fail_write = 0;
-bool fail_all_writes = false;
-std::vector<std::uint8_t> replies;
-std::vector<std::uint8_t> sent;
-std::size_t received = 0;
-bool helper_read = false;
-int prepare_calls = 0;
-int prepare_result = 0;
-int closes = 0;
-
-void reset_client(const Message &first, const Message &last)
+struct State
 {
-    replies.resize(2 * sizeof(Message));
-    std::memcpy(replies.data(), &first, sizeof(first));
-    std::memcpy(replies.data() + sizeof(first), &last, sizeof(last));
-    sent.clear();
-    received = 0;
-    helper_read = false;
-    prepare_calls = prepare_result = closes = 0;
+    bool result_open_fails{};
+    bool prepare_fails{};
+    bool request_open_fails{};
+    bool corrupt_read{};
+    unsigned data_open_failures{};
+    unsigned data_open_calls{};
+    unsigned sleeps{};
+    unsigned prepare_calls{};
+    unsigned closes{};
+    std::string request;
+    std::string result;
+    std::string data;
+    std::vector<std::string> unlinked;
+    std::string renamed_from;
+    std::string renamed_to;
+};
+
+State state;
+
+void reset()
+{
+    state = {};
+}
+
+bool starts_with(const char *value, std::string_view prefix)
+{
+    return std::string_view{value}.starts_with(prefix);
 }
 } // namespace test
 
 extern "C"
 {
-    extern const std::intptr_t KERNEL_ADDRESS_ALLPROC = test::base;
-    extern const off_t KERNEL_OFFSET_PROC_P_PID = 0xbc;
-    extern const off_t KERNEL_OFFSET_PROC_P_UCRED = 0x40;
-    extern const off_t KERNEL_OFFSET_PROC_P_FD = 0x48;
-    extern const off_t KERNEL_OFFSET_UCRED_CR_UID = 4;
-    extern const off_t KERNEL_OFFSET_UCRED_CR_SCEAUTHID = 0x58;
-    extern const off_t KERNEL_OFFSET_UCRED_CR_SCECAPS = 0x60;
-    extern const off_t KERNEL_OFFSET_UCRED_CR_SCEATTRS = 0x80;
-    extern const off_t KERNEL_OFFSET_FILEDESC_FD_RDIR = 0x10;
-    extern const off_t KERNEL_OFFSET_FILEDESC_FD_JDIR = 0x18;
+    pid_t getpid() noexcept
+    {
+        return 4242;
+    }
 
-    int kernel_copyout(std::intptr_t address, void *data, std::size_t size)
+    uid_t geteuid() noexcept
     {
-        const auto offset = static_cast<std::size_t>(address - test::base);
-        if (offset > test::memory.size() || size > test::memory.size() - offset)
-            return -1;
-        std::memcpy(data, test::memory.data() + offset, size);
-        return 0;
+        return 1000;
     }
-    int kernel_copyin(const void *data, std::intptr_t address, std::size_t size)
-    {
-        ++test::writes;
-        if (test::fail_all_writes || test::writes == test::fail_write)
-            return -1;
-        const auto offset = static_cast<std::size_t>(address - test::base);
-        assert(offset <= test::memory.size() && size <= test::memory.size() - offset);
-        std::memcpy(test::memory.data() + offset, data, size);
-        return 0;
-    }
-    std::intptr_t kernel_get_root_vnode()
-    {
-        return test::base + 900;
-    }
-    std::uint32_t kernel_get_fw_version()
-    {
-        return 0x06020004;
-    }
-    payload_args_t *payload_get_args()
-    {
-        return nullptr;
-    }
-    int sceKernelGetAppInfo(pid_t, AppInfo *)
-    {
-        return -1;
-    }
-    int klog_printf(const char *, ...)
-    {
-        return 0;
-    }
-    int sceKernelOpen(const char *, int, mode_t)
-    {
-        return 10;
-    }
-    int sceKernelClose(int)
-    {
-        ++test::closes;
-        return 0;
-    }
-    std::int64_t sceKernelRead(int, void *buffer, std::size_t)
-    {
-        if (test::helper_read)
-            return 0;
-        test::helper_read = true;
-        std::memcpy(buffer,
-                    "\x7f"
-                    "ELF",
-                    4);
-        return 4;
-    }
-    int sceNetSocket(const char *, int, int, int)
-    {
-        return 20;
-    }
-    int sceNetSocketClose(int)
-    {
-        ++test::closes;
-        return 0;
-    }
-    int sceNetConnect(int, const void *address, std::uint32_t length)
-    {
-        assert(length == sizeof(NetSockaddrIn));
-        const auto &endpoint = *static_cast<const NetSockaddrIn *>(address);
-        assert(endpoint.length == length && endpoint.family == 2);
-        assert(endpoint.address == 0x0100007f && endpoint.port == 0x3d23); // 127.0.0.1:9021
-        return 0;
-    }
-    int sceNetSetsockopt(int, int, int, const void *, std::uint32_t)
-    {
-        return 0;
-    }
-    int sceNetSend(int, const void *bytes, std::size_t size, int)
-    {
-        const auto count = std::min(size, std::size_t{7});
-        const auto *start = static_cast<const std::uint8_t *>(bytes);
-        test::sent.insert(test::sent.end(), start, start + count);
-        return static_cast<int>(count);
-    }
-    int sceNetRecv(int, void *bytes, std::size_t size, int)
-    {
-        const auto count = std::min({size, std::size_t{3}, test::replies.size() - test::received});
-        std::memcpy(bytes, test::replies.data() + test::received, count);
-        test::received += count;
-        return static_cast<int>(count);
-    }
+
     int seteuid(uid_t) noexcept
     {
-        ++test::prepare_calls;
-        return test::prepare_result;
+        ++test::state.prepare_calls;
+        if (test::state.prepare_fails)
+        {
+            errno = EPERM;
+            return -1;
+        }
+        return 0;
+    }
+
+    int open(const char *path, int flags, ...)
+    {
+        (void)flags;
+        if (std::strcmp(path, "/download0/lapy_owned_result") == 0)
+        {
+            if (test::state.result_open_fails)
+            {
+                errno = ENOENT;
+                return -1;
+            }
+            return 10;
+        }
+        if (test::starts_with(path, "/download0/.elevate_proc."))
+        {
+            if (test::state.request_open_fails)
+            {
+                errno = EIO;
+                return -1;
+            }
+            return 11;
+        }
+        if (test::starts_with(path, "/data/.lapy_probe_"))
+        {
+            ++test::state.data_open_calls;
+            if (test::state.data_open_calls <= test::state.data_open_failures)
+            {
+                errno = EACCES;
+                return -1;
+            }
+            return 12;
+        }
+        errno = ENOENT;
+        return -1;
+    }
+
+    ssize_t write(int descriptor, const void *buffer, size_t size)
+    {
+        const auto count = std::min(size, std::size_t{3});
+        const auto bytes = std::string_view{static_cast<const char *>(buffer), count};
+        if (descriptor == 10)
+            test::state.result.append(bytes);
+        else if (descriptor == 11)
+            test::state.request.append(bytes);
+        else if (descriptor == 12)
+            test::state.data.append(bytes);
+        else
+        {
+            errno = EBADF;
+            return -1;
+        }
+        return static_cast<ssize_t>(count);
+    }
+
+    ssize_t read(int descriptor, void *buffer, size_t size)
+    {
+        if (descriptor != 12)
+        {
+            errno = EBADF;
+            return -1;
+        }
+        const auto count = std::min(size, test::state.data.size());
+        std::memcpy(buffer, test::state.data.data(), count);
+        if (test::state.corrupt_read && count != 0)
+            static_cast<char *>(buffer)[0] = 'X';
+        return static_cast<ssize_t>(count);
+    }
+
+    off_t lseek(int descriptor, off_t offset, int whence) noexcept
+    {
+        return descriptor == 12 && offset == 0 && whence == SEEK_SET ? 0 : -1;
+    }
+
+    int close(int)
+    {
+        ++test::state.closes;
+        return 0;
+    }
+
+    int fchmod(int descriptor, mode_t mode) noexcept
+    {
+        return descriptor == 10 && mode == 0644 ? 0 : -1;
+    }
+
+    int rename(const char *old_path, const char *new_path) noexcept
+    {
+        test::state.renamed_from = old_path;
+        test::state.renamed_to = new_path;
+        return 0;
+    }
+
+    int unlink(const char *path) noexcept
+    {
+        test::state.unlinked.emplace_back(path);
+        return 0;
+    }
+
+    int usleep(useconds_t)
+    {
+        ++test::state.sleeps;
+        return 0;
     }
 }
 
 int main()
 {
-    Message request{};
-    request.pid = 123;
-    const std::array<std::uint8_t, 24> golden{'E', 'L', 'V', '1', 1,   0, 24, 0, 1, 0, 0, 0,
-                                              1,   0,   0,   0,   123, 0, 0,  0, 0, 0, 0, 0};
-    assert(std::memcmp(&request, golden.data(), golden.size()) == 0);
-    assert(elevation::wire::validate(request) == Status::ok);
-    auto invalid = request;
-    invalid.magic = 0;
-    assert(handle_request(invalid) == Status::invalid_request);
-    invalid = request;
-    invalid.version = 2;
-    assert(handle_request(invalid) == Status::unsupported_version);
-    invalid = request;
-    invalid.size = 25;
-    assert(handle_request(invalid) == Status::invalid_request);
-    invalid = request;
-    invalid.capability = static_cast<Capability>(2);
-    assert(handle_request(invalid) == Status::unsupported_capability);
-    invalid = request;
-    invalid.pid = UINT32_MAX;
-    assert(handle_request(invalid) == Status::invalid_request);
-    invalid = request;
-    invalid.kind = Kind::response;
-    assert(handle_request(invalid) == Status::invalid_request);
-    invalid = request;
-    invalid.status = Status::apply_failed;
-    assert(handle_request(invalid) == Status::invalid_request);
-    assert(test::writes == 0);
+    using elevation::Capability;
+    using elevation::Status;
 
-    Message prepare{};
-    prepare.pid = static_cast<std::uint32_t>(getpid());
-    prepare.kind = Kind::prepare;
-    auto response = prepare;
-    response.kind = Kind::response;
-    test::reset_client(prepare, response);
+    test::reset();
+    test::state.data_open_failures = 1;
     assert(elevation::request(Capability::filesystem) == Status::ok);
-    assert(test::prepare_calls == 1 && test::closes == 2);
-    assert(test::sent.size() == 4 + 2 * sizeof(Message));
-    Message prepared{};
-    std::memcpy(&prepared, test::sent.data() + 4 + sizeof(Message), sizeof(Message));
-    assert(elevation::wire::matches(prepared, prepare, Kind::prepared));
+    assert(test::state.prepare_calls == 1);
+    assert(test::state.request == "{\"PID\":4242}\n");
+    assert(test::state.renamed_from == "/download0/.elevate_proc.4242");
+    assert(test::state.renamed_to == "/download0/elevate_proc");
+    assert(test::state.data == "LAPYOWN\n");
+    assert(test::state.result == "DATA_OK=1 OPEN_ERRNO=0\n");
+    assert(test::state.data_open_calls == 2 && test::state.sleeps == 1);
 
-    test::reset_client(prepare, response);
-    test::prepare_result = -1;
-    assert(elevation::request(Capability::filesystem) == Status::prepare_failed);
-    test::reset_client(prepare, response);
-    test::replies.resize(sizeof(Message) - 1);
-    assert(elevation::request(Capability::filesystem) == Status::transport_error);
-    assert(test::prepare_calls == 0 && test::closes == 2);
-    auto wrong_pid = prepare;
-    ++wrong_pid.pid;
-    test::reset_client(wrong_pid, response);
-    assert(elevation::request(Capability::filesystem) == Status::protocol_error);
-    assert(test::prepare_calls == 0 && test::closes == 2);
-    // Reject malformed headers, unknown values, and success before preparation.
-    for (int field = 0; field < 7; ++field)
-    {
-        auto bad = prepare;
-        switch (field)
-        {
-        case 0:
-            bad.magic = 0;
-            break;
-        case 1:
-            bad.version = 2;
-            break;
-        case 2:
-            bad.size = 25;
-            break;
-        case 3:
-            bad.kind = static_cast<Kind>(99);
-            break;
-        case 4:
-            bad.capability = static_cast<Capability>(2);
-            break;
-        case 5:
-            bad.status = static_cast<Status>(99);
-            break;
-        case 6:
-            bad.kind = Kind::response;
-            break;
-        }
-        test::reset_client(bad, response);
-        assert(elevation::request(Capability::filesystem) == Status::protocol_error);
-        assert(test::prepare_calls == 0 && test::closes == 2);
-    }
-    auto wrong_response = response;
-    ++wrong_response.pid;
-    test::reset_client(prepare, wrong_response);
-    assert(elevation::request(Capability::filesystem) == Status::protocol_error);
-    assert(test::prepare_calls == 1 && test::closes == 2);
-    test::reset_client(prepare, response);
-    test::replies.resize(2 * sizeof(Message) - 1);
-    assert(elevation::request(Capability::filesystem) == Status::transport_error);
-    assert(test::prepare_calls == 1 && test::closes == 2);
-    auto rejected = response;
-    rejected.status = Status::target_mismatch;
-    test::reset_client(rejected, response);
-    assert(elevation::request(Capability::filesystem) == Status::target_mismatch);
-    assert(test::prepare_calls == 0 && test::closes == 2);
-    assert(elevation::request(Capability::filesystem, nullptr) == Status::invalid_request);
-    response.status = Status::apply_failed;
-    test::reset_client(prepare, response);
-    assert(elevation::request(Capability::filesystem) == Status::apply_failed);
+    test::reset();
     assert(elevation::request(static_cast<Capability>(2)) == Status::unsupported_capability);
+    assert(test::state.prepare_calls == 0 && test::state.closes == 0);
 
-    const Target target{test::base, test::base + 128, test::base + 512};
-    State original{};
-    original.identity.fill(1000);
-    original.authority = 1234;
-    original.root = test::base + 800;
-    original.jail = test::base + 850;
-    assert(write_state(target, original));
-    assert(grant_filesystem(target, original) == Status::ok);
-    State state{};
-    assert(read_state(target, state));
-    assert(state.root == kernel_get_root_vnode() && state.identity[0] == 0);
+    test::reset();
+    test::state.result_open_fails = true;
+    assert(elevation::request(Capability::filesystem) == Status::unavailable);
 
-    // Every individual kernel write can fail; the complete original state must return.
-    for (int failure = 1; failure <= 6; ++failure)
-    {
-        test::fail_write = 0;
-        assert(write_state(target, original));
-        test::writes = 0;
-        test::fail_write = failure;
-        assert(grant_filesystem(target, original) == Status::apply_failed);
-        assert(read_state(target, state) && state == original);
-    }
-    test::fail_all_writes = true;
-    assert(grant_filesystem(target, original) == Status::rollback_failed);
+    test::reset();
+    test::state.prepare_fails = true;
+    assert(elevation::request(Capability::filesystem) == Status::prepare_failed);
+    assert(test::state.closes == 1);
+
+    test::reset();
+    test::state.request_open_fails = true;
+    assert(elevation::request(Capability::filesystem) == Status::transport_error);
+
+    test::reset();
+    test::state.data_open_failures = 1000;
+    assert(elevation::request(Capability::filesystem) == Status::timeout);
+    assert(test::state.data_open_calls == 200 && test::state.sleeps == 200);
+    assert(test::state.result == "DATA_OK=0 OPEN_ERRNO=" + std::to_string(EACCES) + "\n");
+
+    test::reset();
+    test::state.corrupt_read = true;
+    assert(elevation::request(Capability::filesystem) == Status::apply_failed);
+    assert(test::state.result == "DATA_OK=0 OPEN_ERRNO=0\n");
 }
