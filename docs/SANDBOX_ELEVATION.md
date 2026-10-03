@@ -116,6 +116,37 @@ Lapy requires its documented `ps5log/1` client and server configuration. Treat
 balanced final exit as required evidence. `daemon_held` is a failed run even if
 the console has not panicked.
 
+## Firmware 6.02 validation result
+
+On 2026-10-03, the exact upstream one-shot daemon at commit
+`5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad` was tested on firmware 6.02 with
+PS5 Payload SDK v0.40 (`13ccc2d5bf2ac396cdf5007c2b72493cb3d5c8bb`). The
+Lapy ELF SHA-256 was
+`3e1a101e21b4be242dd65146140985f745e21d8b82532340774800fc6930430a`.
+
+The uninterrupted quick run completed 50/50 functional cycles in 142.93
+seconds with 50 unique title PIDs. Every cycle had:
+
+- successful application `/data` write/read proof;
+- `request_result stage=complete error=0` and `client_result data_rw=1`;
+- a clean `daemon_result stage=complete error=0` and `ps5log/1` BYE;
+- root hold/use counters returning from the transferred `56/55` state to the
+  same `54/53` baseline after title exit; and
+- successful title close and healthy FTP, klog, and elfldr services.
+
+No kernel panic, double fault, or fatal kernel trap was captured. This is a
+functional lifecycle pass, not a production safety qualification: klog also
+captured 54 user-mode `SIGSEGV` exits from upstream `payload.elf` donor
+processes. Fifty-one faulted at `0x1b0`; three used ASLR addresses ending in
+`0x1b0`. Lapy's root-balance checks still passed, but any donor fault fails the
+strict criterion in this guide.
+
+Therefore firmware 6.02 remains unsupported for production use. Do not enable
+elevation by default on it, and do not patch a private copy of Lapy to hide the
+diagnostic. Resolve firmware-specific donor release behavior in the upstream
+project, then repeat this lifecycle gate. Upstream's documented 12.02 result is
+not evidence for other firmware.
+
 ## Build and host tests
 
 ```bash

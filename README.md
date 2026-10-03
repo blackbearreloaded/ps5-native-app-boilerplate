@@ -40,7 +40,9 @@ It publishes Lapy's `/download0/elevate_proc` request and returns success only
 after a real `/data` write/read proof. The former raw-pointer helper and the
 later copied Lapy backend have both been removed: this repository packages no
 elevation ELF or kernel-manipulation code. The default skeleton remains
-sandboxed.
+sandboxed. Firmware 6.02 passed a 50-cycle functional lifecycle test with the
+exact upstream daemon, but emitted donor-process SIGSEGV diagnostics and is
+therefore not production-qualified; see the elevation guide.
 
 An opt-in [update check](#update-check) lets an app listed on
 [homebrew.page](https://homebrew.page) tell its user that a newer release
