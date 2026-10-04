@@ -37,7 +37,9 @@ password=${PS5_FTP_PASSWORD:-codex}
 command -v make >/dev/null || { echo "missing required command: make" >&2; exit 2; }
 command -v python3 >/dev/null || { echo "missing required command: python3" >&2; exit 2; }
 
-title_id=$(python3 - "$root/sce_sys/param.json" <<'PY'
+param_path=${APP_PARAM:-sce_sys/param.json}
+[[ $param_path == /* ]] || param_path="$root/$param_path"
+title_id=$(python3 - "$param_path" <<'PY'
 import json, re, sys
 with open(sys.argv[1], encoding="utf-8") as source:
     title_id = json.load(source)["titleId"]

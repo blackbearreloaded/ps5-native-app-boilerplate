@@ -372,9 +372,12 @@ unpacks it and puts the new version in place once the app has closed.
    ```
 
 The catalog's signature and the release's SHA-256 are verified before anything
-is replaced, and a failure at any step leaves the app as it was. The example
-title updated itself on a PS5 on 2026-10-03, and the new version started at
-once; the guide records that run and what it did not cover.
+is replaced. Release entries replace matching top-level app entries while
+unlisted installation or user files remain in place; a failure at any step
+leaves the app as it was. The example
+title updated itself on firmware 6.02 and 12.70 on 2026-10-04, preserving an
+unlisted top-level user file; the guide records those runs and what they did
+not cover.
 
 | | |
 | --- | --- |

@@ -19,7 +19,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".deps/lapy"
-LAPY_COMMIT = "5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad"
+LAPY_COMMIT = "54a095c0f19161825e845daa760a03b446e654fa"
 LAPY = CACHE / f"PS5-Lapy-JB-Daemon-{LAPY_COMMIT[:7]}"
 SDK = CACHE / "ps5-payload-sdk-v0.40"
 SDK_URL = "https://github.com/ps5-payload-dev/sdk/releases/download/v0.40/ps5-payload-sdk.zip"

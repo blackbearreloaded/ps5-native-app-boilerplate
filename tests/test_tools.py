@@ -160,6 +160,39 @@ class ToolTests(unittest.TestCase):
             self.assertIn("/data/homebrew/PPSA12345.ffpkg", result.stdout)
             self.assertIn("no network request was sent", result.stdout)
 
+    def test_deploy_uses_selected_app_param_title(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sandbox = Path(directory)
+            (sandbox / "tools").mkdir()
+            (sandbox / "sce_sys").mkdir()
+            (sandbox / "examples/demo/sce_sys").mkdir(parents=True)
+            shutil.copy2(ROOT / "tools/deploy.sh", sandbox / "tools/deploy.sh")
+            (sandbox / "sce_sys/param.json").write_text(
+                '{"titleId":"PPSA12345"}\n', encoding="utf-8"
+            )
+            selected_param = sandbox / "examples/demo/sce_sys/param.json"
+            selected_param.write_text(
+                '{"titleId":"PPSA54321"}\n', encoding="utf-8"
+            )
+
+            environment = os.environ.copy()
+            environment.update(
+                PS5_HOST="192.0.2.1",
+                DEPLOY_DRY_RUN="1",
+                APP_PARAM="examples/demo/sce_sys/param.json",
+            )
+            result = subprocess.run(
+                ["bash", str(sandbox / "tools/deploy.sh"), "undeploy"],
+                cwd=sandbox,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("/data/homebrew/PPSA54321/", result.stdout)
+            self.assertNotIn("/data/homebrew/PPSA12345/", result.stdout)
+
     def test_native_writer_anchors_relro_and_checks_load_congruence(self):
         source = (ROOT / "tooling/native/sce_module_writer.cpp").read_text(
             encoding="utf-8"
