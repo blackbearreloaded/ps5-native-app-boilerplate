@@ -32,6 +32,7 @@ APP_CATEGORY ?= game
 CONTENT_SUFFIX ?=
 HOST_CC ?= clang
 HOST_CXX ?= clang++
+HOST_CC ?= clang
 HOST_TEST_CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
 	-ffunction-sections -fdata-sections
 HOST_TEST_CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
@@ -54,7 +55,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-bu
 	$(wildcard tooling/native/runtime/*.txt)
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-ffpfsc update-check-example test-update-check deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-ffpfsc update-check-example test-update-check self-update-helper self-update-example test-self-update deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -67,7 +68,7 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: test-unit test-integration test-elevation test-update-check
+test: test-unit test-integration test-elevation test-update-check test-self-update
 
 .PHONY: test-elevation
 test-elevation:
@@ -84,6 +85,20 @@ test-update-check:
 		tests/test_update_check.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_update_check
 	@build/tests/test_update_check
 	@printf '%s\n' 'Update-check version, parsing and decision checks passed.'
+test-self-update:
+	@mkdir -p build/tests/self-update
+	@for name in miniz miniz_tinfl miniz_tdef miniz_zip; do \
+		$(HOST_CC) -std=c11 -O2 -w -g -fsanitize=address,undefined \
+			-c third_party/miniz/$$name.c -o build/tests/self-update/$$name.o || exit 1; \
+	done
+	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-Ithird_party -Iexamples/self-update -Iexamples/update-check \
+		tests/test_self_update.cpp examples/self-update-helper/updater.cpp \
+		examples/self-update-helper/archive.cpp examples/self-update-helper/files.cpp \
+		build/tests/self-update/*.o -pthread $(HOST_TEST_LDFLAGS) -o build/tests/test_self_update
+	@build/tests/test_self_update
+	@printf '%s\n' 'Self-update check, download, staging, apply and refusal checks passed.'
+
 test-deps:
 	@printf '%s\n' '==> [test-deps] Fetching the pinned host-only GoogleTest source'
 	@bash tools/setup-test-dependencies.sh >/dev/null
@@ -154,6 +169,27 @@ update-check-example: $(RUNTIME)
 		APP_WRAP_SYMBOLS="fcntl $(APP_WRAP_SYMBOLS)" \
 		bash tools/build.sh Folder
 
+SELF_UPDATE_HELPER := build/self-update/self-updater.elf
+
+self-update-helper:
+	@printf '%s\n' '==> [self-update] Building the helper for the payload loader'
+	@bash tools/setup-native-dependencies.sh >/dev/null
+	@$(MAKE) --no-print-directory -s -C examples/self-update-helper \
+		PS5_PAYLOAD_SDK="$(CURDIR)/.deps/native/ps5-payload-sdk" \
+		OUTPUT="$(CURDIR)/$(SELF_UPDATE_HELPER)"
+	@python3 tools/validate-loader-elf.py "$(SELF_UPDATE_HELPER)"
+
+self-update-example: $(RUNTIME) self-update-helper
+	@printf '%s\n' '==> [self-update] Building the self-update example title'
+	@APP_SOURCE_DIR=examples/self-update \
+		APP_PARAM=examples/self-update/sce_sys/param.json \
+		APP_SCE_SYS=sce_sys APP_ASSETS=examples/self-update/assets \
+		APP_INCLUDE_PATHS="examples/update-check $(APP_INCLUDE_PATHS)" \
+		PACBREW_PACKAGES="libcurl $(PACBREW_PACKAGES)" \
+		APP_WRAP_SYMBOLS="fcntl $(APP_WRAP_SYMBOLS)" \
+		APP_ROOT_FILES="$(SELF_UPDATE_HELPER) $(APP_ROOT_FILES)" \
+		bash tools/build.sh Folder
+
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
@@ -214,6 +250,8 @@ help:
 	  'make sandbox-elevation-ffpfsc  Build the official-Lapy client proof image' \
 	  'make update-check-example  Build the catalog update-check example title' \
 	  'make test-update-check     Run the update-check host tests' \
+	  'make self-update-example   Build the self-update example title and its helper' \
+	  'make test-self-update      Run the self-update host tests' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
 	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES, APP_WRAP_SYMBOLS' \

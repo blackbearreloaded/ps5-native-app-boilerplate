@@ -86,6 +86,16 @@ native title, is original BlackBearReloaded code (GPL-3.0-or-later), taken from
 the ProsperoRadio and ProsperoLichess projects. Its `gmtime_r` follows Howard
 Hinnant's public-domain `civil_from_days` algorithm.
 
+## Vendored miniz
+
+`third_party/miniz/` holds [miniz](https://github.com/richgel999/miniz) 3.0.2
+(commit `293d4db1b7d0ffee9756d035b9ac6f7431ef8492`), MIT, unmodified, with its
+`LICENSE`; `SOURCE.json` records each file's SHA-256. Only the self-update
+helper (`examples/self-update-helper`) and its host test link it; an
+application that ships that helper ships miniz and must carry its notice. The
+helper's archive validation and file helpers are original BlackBearReloaded
+code (GPL-3.0-or-later), taken from the ProsperoStore project.
+
 ## Optional UFS2Tool dependency
 
 When `.ffpkg` output is requested, the platform bootstrapper fetches

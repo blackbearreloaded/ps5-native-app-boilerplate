@@ -26,7 +26,17 @@ enum class Color : std::uint32_t
 
 class Canvas;
 using DrawScene = void (*)(Canvas &) noexcept;
+// Draws the scene once and keeps it on screen.
 [[noreturn]] void run(DrawScene draw, std::string_view ready_message) noexcept;
+// Calls draw for every frame, for a scene that changes. The callback redraws the whole
+// frame; drawing on the CPU, a full 1920x1080 frame takes longer than one display refresh.
+[[noreturn]] void run_frames(DrawScene draw, std::string_view ready_message) noexcept;
+
+namespace detail
+{
+[[noreturn]] void present(DrawScene draw, std::string_view ready_message,
+                          bool every_frame) noexcept;
+}
 
 class Canvas final
 {
@@ -45,7 +55,8 @@ class Canvas final
 
     std::uint32_t *pixels_;
 
-    friend void run(DrawScene draw, std::string_view ready_message) noexcept;
+    friend void detail::present(DrawScene draw, std::string_view ready_message,
+                                bool every_frame) noexcept;
 };
 
 void read_asset_text(const char *path, std::span<char> destination,

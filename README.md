@@ -335,6 +335,55 @@ shipping its licence notices; the guide lists them.
 | Host tests | `make test-update-check` |
 | What the catalog publishes | [Store API](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md) and [App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md) |
 
+### Self-update
+
+The update check tells the user; the self-update example goes one step
+further and lets a listed app **replace itself with its newest release**. The
+app asks its user, downloads the release ZIP and shows the progress and time
+left; a small helper program, started through the console's payload loader,
+unpacks it and puts the new version in place once the app has closed.
+
+1. Copy the kits and build the helper into the app:
+
+   ```bash
+   cp examples/update-check/{update_check,console_curl}.{h,c} src/
+   cp examples/self-update/self_update*.{h,c} src/
+   ```
+
+   ```make
+   PACBREW_PACKAGES += libcurl
+   APP_WRAP_SYMBOLS += fcntl
+   APP_ROOT_FILES += build/self-update/self-updater.elf
+
+   app ffpkg ffpfsc packages: self-update-helper
+   ```
+
+2. Check, ask, start, and close when it is staged:
+
+   ```cpp
+   #include "self_update.h"
+
+   if (self_update_check_self(&offer) == SELF_UPDATE_AVAILABLE)   // worker thread
+       ask_user("Version %s is available. Update now?", offer.version);
+   self_update_start(&job, self_update_console(), &offer);       // the user said yes
+   self_update_poll(&job, &status);                              // every frame
+   if (status.phase == SELF_UPDATE_READY && self_update_apply(&job) == 1)
+       sceSystemServiceLoadExec("exit", nullptr);
+   ```
+
+The catalog's signature and the release's SHA-256 are verified before anything
+is replaced, and a failure at any step leaves the app as it was. **The example
+is covered by host tests but has not yet been run on a console**; the guide
+lists what a console still has to show.
+
+| | |
+| --- | --- |
+| Guide, trust model and what is not proven yet | [docs/SELF_UPDATE.md](docs/SELF_UPDATE.md) |
+| The kit | [`examples/self-update/`](examples/self-update) |
+| The helper | [`examples/self-update-helper/`](examples/self-update-helper), `make self-update-helper` |
+| Example title | `make self-update-example` builds `dist/PPSA99782/` |
+| Host tests | `make test-self-update` |
+
 ### Read-only application assets
 
 Put fonts, images, configuration defaults, shaders, and other packaged data
@@ -504,6 +553,9 @@ tests/                        Host-native C++ unit and tooling integration tests
 examples/sandbox-elevation/   Optional owned-reference filesystem capability example
 examples/update-check/        Optional catalog update check: update_check.*, console_curl.* (libcurl support), example title
 examples/curl/                Blocking send/read/abort API on curl multi, for large downloads
+examples/self-update/         Optional self-update: self_update*.{h,c}, example title
+examples/self-update-helper/  The helper the self-update sends to the payload loader
+third_party/miniz/            Vendored ZIP reader used by the self-update helper (MIT)
 tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that the console lacks
 ```
 
@@ -525,6 +577,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | [User interface](docs/USER_INTERFACE.md) | Where the skeleton's CPU renderer stops, and the companion OpenGL kit (components, themes, screens) for real interfaces |
 | [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
 | [Update check](docs/UPDATE_CHECK.md) | Catalog update check for listed apps: the four files, the rules, the example title |
+| [Self-update](docs/SELF_UPDATE.md) | Letting a listed app replace itself with its newest release: the kit, the helper, the trust model |
 | [libcurl](docs/CURL.md) | HTTPS with libcurl and OpenSSL: setup, what the console needs, large downloads, elevated apps, troubleshooting |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common setup, build, packaging, and launcher failures |
 | [Contributing](CONTRIBUTING.md) | Change requirements and release checks |

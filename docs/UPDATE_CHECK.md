@@ -74,7 +74,8 @@ Rules that keep it harmless:
   that doesn't know the app's content version: all give
   `UPDATE_CHECK_UNKNOWN`, and none is an error worth showing.
 - **Only notify.** The check never downloads or installs. Point the user to
-  ProsperoStore or to the app's page.
+  ProsperoStore or to the app's page. To let the app update itself instead,
+  use the [self-update](SELF_UPDATE.md) example, which builds on this check.
 - **One check at a time.** The function isn't reentrant.
 
 ## What makes an update visible

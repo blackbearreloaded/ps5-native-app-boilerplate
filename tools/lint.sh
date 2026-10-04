@@ -18,6 +18,9 @@ checked=0
 for file in "${repository_files[@]}"; do
     [[ -f $file ]] || continue
     case "$file" in
+        third_party/*)
+            continue # Vendored code keeps its upstream attribution and formatting.
+            ;;
         *.c|*.cc|*.cpp|*.h|*.hpp|*.ld|*.py|*.ps1|*.sh|*.yml|*.yaml|Makefile|.clang-format|.clang-tidy|.env.example)
             header=$(head -n 20 "$file")
             grep -Fq ps5-native-app-boilerplate <<<"$header"

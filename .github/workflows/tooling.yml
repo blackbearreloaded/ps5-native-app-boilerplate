@@ -106,6 +106,14 @@ jobs:
           make update-check-example
           test -f dist/PPSA99780/assets/targets.txt
 
+      - name: Check self-update engine and helper
+        run: make test-self-update
+
+      - name: Build self-update example
+        run: |
+          make self-update-example
+          test -f dist/PPSA99782/self-updater.elf
+
       - name: Reproduce clean-room runtime shim
         run: make libc
 
