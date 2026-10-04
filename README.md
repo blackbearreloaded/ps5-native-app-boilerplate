@@ -34,15 +34,15 @@ before distribution. Do not present two tested versions as universal firmware
 compatibility.
 
 An opt-in [elevation example](docs/SANDBOX_ELEVATION.md) is a cooperative client
-for the official
+for upstream
 [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon).
-It publishes Lapy's `/download0/elevate_proc` request and returns success only
-after a real `/data` write/read proof. The former raw-pointer helper and the
-later copied Lapy backend have both been removed: this repository packages no
-elevation ELF or kernel-manipulation code. The default skeleton remains
-sandboxed. Firmware 6.02 passed a 50-cycle functional lifecycle test with the
-exact upstream daemon, but emitted donor-process SIGSEGV diagnostics and is
-therefore not production-qualified; see the elevation guide.
+With `APP_LAPY_HELPER=1`, the build fetches Lapy at a pinned commit, invokes
+its unmodified exact-title `owned-helper` target, verifies the generated
+manifest and packages the helper ELF. At startup the client gives a resident
+Lapy service a bounded opportunity, then sends the packaged helper to the
+local ELF loader on TCP port 9021. Only a real `/data` write/read proof returns
+success. The default skeleton remains sandboxed; see the elevation guide for
+firmware caveats.
 
 An opt-in [update check](#update-check) lets an app listed on
 [homebrew.page](https://homebrew.page) tell its user that a newer release
@@ -69,7 +69,7 @@ the two fit together.
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
 | Root skeleton | C++20 graphical Hello World with RAII, bounded views, unique ownership, CPU-rendered text, shapes, and packaged data |
 | Update check | Optional [`examples/update-check`](examples/update-check): tells the users of an app listed on homebrew.page that a newer release exists |
-| Sandbox elevation | Optional cooperative client for an independently built, unmodified upstream Lapy daemon |
+| Sandbox elevation | Optional resident-first client with an embedded exact-title upstream Lapy one-shot helper |
 | Validation | C++ unit tests, host integration tests, prerequisites, and static ELF/FSELF inspection |
 
 ## Quick start
@@ -550,7 +550,7 @@ runtime/libc.prx.sha256       Expected digest for the generated loader shim
 tools/rebuild-libc.sh         Linux/WSL deterministic shim reproduction check
 tools/rebuild-libc.ps1        Windows deterministic shim reproduction check
 tests/                        Host-native C++ unit and tooling integration tests
-examples/sandbox-elevation/   Optional owned-reference filesystem capability example
+examples/sandbox-elevation/   Optional embedded upstream-Lapy filesystem capability example
 examples/update-check/        Optional catalog update check: update_check.*, console_curl.* (libcurl support), example title
 examples/curl/                Blocking send/read/abort API on curl multi, for large downloads
 examples/self-update/         Optional self-update: self_update*.{h,c}, example title
