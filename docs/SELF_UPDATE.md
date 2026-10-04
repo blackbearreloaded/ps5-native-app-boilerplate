@@ -9,10 +9,10 @@ helper it ships with, and an example title.
 It builds on the [update check](UPDATE_CHECK.md), which only tells the user
 that a newer release exists. Use that one if telling is enough.
 
-> **Status.** The whole flow is covered by host tests (the engine against the
-> real helper code, with real archives and folders). **It has not yet been run
-> on a console.** The points that only a console can show are listed under
-> [What is not proven yet](#what-is-not-proven-yet).
+> **Status.** Run on a PS5 on 2026-10-03: the example title updated itself
+> from one version to the next and the new version started
+> ([Console validation](#console-validation)). The same section lists what that
+> run did not cover.
 
 ## What the user sees
 
@@ -267,20 +267,78 @@ socket pair with real ZIP archives and real folders:
 
 The host test replaces the network, the Ed25519 check and the payload loader.
 
-## What is not proven yet
+## Console validation
 
-None of this has run on a console. A console run has to show:
+Run on a PS5 on 2026-10-03 with the example title installed as a folder under
+`/data/homebrew` and registered by ShadowMountPlus. The console's firmware
+version wasn't recorded. Two builds of the example were used: build A at
+content version `01.000.000` (`eboot.bin` SHA-256
+`4d9587478f0fc0e7c7eeaf43f05b479b366ec7bcb0bcbff64a2ed41a2ff49c5b`, built with
+`SELF_UPDATE_DEV_OFFER`, `SELF_UPDATE_AUTO_ACCEPT=5` and a watchdog), and build
+B at `01.000.010`, a 13.2 MB ZIP attached to a GitHub release (SHA-256
+`ec361bd2309e37b7ef1a5cb29316b95ecbf4763f8af012cbc703b59df1385dd6`).
 
-1. a sandboxed app can start the helper through the loader on port 9021;
-2. the helper keeps running after the app has closed;
-3. the helper sees the app's sandbox (`/mnt/sandbox/<TITLEID>_000`) disappear;
-4. files replaced inside the app's folder are what the next launch runs, with
-   no wait for the folder to be mounted again;
-5. the Ed25519 check through OpenSSL accepts the live catalog;
-6. the download from GitHub's release host through its redirect, and its
-   speed;
-7. the frame loop added to the CPU renderer (`run_frames`) and controller
-   input in the example.
+Build A's report, then build B's after the title was started again:
+
+```text
+SELF-UPDATE: start tag=a3
+SELF-UPDATE: DEVELOPMENT OFFER: the catalog and its signature are skipped
+SELF-UPDATE: controller ready
+SELF-UPDATE: check result=available installed=01.000.000 available=01.000.010 version=1.1.0 test size=13184595 ms=586
+SELF-UPDATE: update accepted
+SELF-UPDATE: phase=starting done=0 total=0 rate=0 left=-
+SELF-UPDATE: phase=downloading done=0 total=13184595 rate=0 left=-
+SELF-UPDATE: phase=downloading done=2915799 total=13184595 rate=2094049 left=a few seconds left
+SELF-UPDATE: phase=downloading done=7405015 total=13184595 rate=3139694 left=a few seconds left
+SELF-UPDATE: phase=downloading done=11910615 total=13184595 rate=3736045 left=a few seconds left
+SELF-UPDATE: phase=unpacking done=0 total=0 rate=0 left=-
+SELF-UPDATE: phase=ready done=26536616 total=26536616 rate=0 left=-
+SELF-UPDATE: applying: the app closes now and the helper replaces its files
+
+SELF-UPDATE: start tag=b1
+SELF-UPDATE: controller ready
+SELF-UPDATE: check result=unknown installed=- available=- version=- size=0 ms=699
+```
+
+and the helper's lines in the kernel log:
+
+```text
+[payload.elf] [self-update] update PPSA99782 01.000.000 -> 01.000.010 in /data/homebrew/PPSA99782
+[payload.elf] [self-update] updated PPSA99782 to 01.000.010
+```
+
+| Checked | Result |
+| --- | --- |
+| A sandboxed app starts the helper through the payload loader on port 9021 | Yes |
+| The download from GitHub, through its redirect to the release file host | Yes: 13.2 MB at 2 to 3.7 MB/s, size and SHA-256 matching |
+| The helper saves, checks and unpacks the archive | Yes: 26.5 MB unpacked within a few seconds of the download ending |
+| The app closes itself | Yes: `Kill for LoadExec ... => 0`, 15 seconds after it was started |
+| The helper keeps running after the app has closed, and sees it gone | Yes |
+| The files are replaced and the work folder removed | Yes: 4 seconds after the app closed, every installed file was byte-for-byte build B's, and `/data/self-update` was gone |
+| The next launch runs the new version, with no wait | Yes: started a few seconds after the replacement, it reported build B's tag and closed itself |
+| The frame loop of the CPU renderer and the controller | The title drew and ran its states; the controller opened. No button was pressed (the offer was accepted by the build's timer) |
+| The console afterwards | Services answering; installed files still build B's two minutes later |
+
+One earlier run the same day failed at the second launch with "Can't start the
+game or app": the helper had unpacked the files with mode 0644, and the console
+refused to start `eboot.bin` (`errno=13`). The helper now gives the unpacked
+files mode 0777, and the host test checks it.
+
+### What that run did not cover
+
+- **The signed catalog on a console.** The test title isn't listed, so the
+  offer came from the development file and build B's own check answered
+  "unknown". The same console-side code, built for a PC with the console calls
+  replaced, verified the live catalog's signature through OpenSSL and decided
+  "available", "up to date" and "unknown" correctly; that is a PC result.
+- **The buttons**: accepting with Cross, declining and cancelling with Circle.
+- **Cancel and every failure path** (host tests only), and a console without a
+  payload loader.
+- **An app on an external drive or USB**, a large release, and an app with
+  thousands of files.
+- **Power loss** during the replacement.
+- **The notification** was sent by the helper; that it appeared on screen was
+  not recorded.
 
 ## Credits
 

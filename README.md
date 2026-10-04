@@ -372,13 +372,13 @@ unpacks it and puts the new version in place once the app has closed.
    ```
 
 The catalog's signature and the release's SHA-256 are verified before anything
-is replaced, and a failure at any step leaves the app as it was. **The example
-is covered by host tests but has not yet been run on a console**; the guide
-lists what a console still has to show.
+is replaced, and a failure at any step leaves the app as it was. The example
+title updated itself on a PS5 on 2026-10-03, and the new version started at
+once; the guide records that run and what it did not cover.
 
 | | |
 | --- | --- |
-| Guide, trust model and what is not proven yet | [docs/SELF_UPDATE.md](docs/SELF_UPDATE.md) |
+| Guide, trust model and the console results | [docs/SELF_UPDATE.md](docs/SELF_UPDATE.md) |
 | The kit | [`examples/self-update/`](examples/self-update) |
 | The helper | [`examples/self-update-helper/`](examples/self-update-helper), `make self-update-helper` |
 | Example title | `make self-update-example` builds `dist/PPSA99782/` |
