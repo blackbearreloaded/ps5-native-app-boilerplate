@@ -235,6 +235,7 @@ information". Build definitions, for trying it and for scripted console runs:
 | `SELF_UPDATE_DEV_OFFER` | **Development only.** Takes the offer from `/app0/assets/offer.txt` (five lines: new content version, version name, release ZIP on GitHub, SHA-256, size) instead of the catalog. It skips the catalog's signature: never ship a build with it |
 | `SELF_UPDATE_AUTO_ACCEPT=<seconds>` | Accepts the offer after that long, as if Cross had been pressed |
 | `SELF_UPDATE_EXIT_AFTER=<seconds>` | Closes the title that long after it has nothing more to do |
+| `SELF_UPDATE_WATCHDOG=<seconds>` | Closes the title that long after it started, whatever else happens, so a scripted run never leaves it open |
 
 An app with a real interface draws its own prompt from the same values. For a
 dialog and progress view in the style of ProsperoStore, see

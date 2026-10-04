@@ -434,6 +434,17 @@ void draw_frame(Canvas &canvas) noexcept
     }
     (void)shown_ms;
 }
+
+#ifdef SELF_UPDATE_WATCHDOG
+// For scripted console runs: the title ends itself after this many seconds whatever else
+// happens, so a run can never leave it open.
+void *watchdog_thread(void *) noexcept
+{
+    (void)sceKernelUsleep(static_cast<std::uint32_t>(SELF_UPDATE_WATCHDOG) * 1000000u);
+    emit("watchdog: closing");
+    close_app();
+}
+#endif
 } // namespace
 
 int main()
@@ -441,6 +452,11 @@ int main()
     pthread_t checker{};
     report_file = sceKernelOpen(report_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     emit("start tag=" EXAMPLE_STR(SELF_UPDATE_RUN_TAG));
+#ifdef SELF_UPDATE_WATCHDOG
+    pthread_t watchdog{};
+    if (pthread_create(&watchdog, nullptr, watchdog_thread, nullptr) == 0)
+        (void)pthread_detach(watchdog);
+#endif
     screen_since = now_ms();
     // The check blocks on the network, so it never runs on the thread that draws.
     if (pthread_create(&checker, nullptr, check_thread, nullptr) != 0)
