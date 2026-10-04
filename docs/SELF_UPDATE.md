@@ -47,7 +47,7 @@ sequenceDiagram
     A->>U: "Version 1.4.0 is available. Update now?"
     U->>A: Update now
     A->>L: sends self-updater.elf
-    L->>H: starts it; the same connection<br/>now links app and helper
+    L->>H: starts it, and the same connection<br/>now links app and helper
     A->>H: title ID, versions, size, SHA-256
     H->>A: ready (found the app's folder, made a work folder)
     loop while downloading
