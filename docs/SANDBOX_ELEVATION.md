@@ -81,7 +81,8 @@ failed `/data` proof never authorizes privileged work.
 `tools/build-lapy-helper.py` pins:
 
 - mpereiraesaa's Lapy commit
-  [`5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/commit/5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad);
+  [`54a095c0f19161825e845daa760a03b446e654fa`](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/commit/54a095c0f19161825e845daa760a03b446e654fa),
+  proposed upstream in [PR #48](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/48);
 - official PS5 Payload SDK v0.40, used only for the helper because v0.41
   changed the credential-attribute API; and
 - the pinned `ps5log/1` header used by upstream's build.
@@ -103,15 +104,23 @@ proof and the fixed 24-byte wire ABI. Host tests cannot establish kernel or
 firmware safety.
 
 Upstream documents console validation of the helper lifecycle on firmware
-12.02. Other SDK-supported firmware remains experimental. A title using this
-option must qualify its exact helper, firmware, jailbreak and elfldr with
-repeated launch, `/data` proof, normal use and clean-exit cycles. Never fall
-back to a raw-pointer helper when Lapy rejects a target.
+12.02. The exact pinned helper was also qualified through this boilerplate on
+firmware 6.02 and 12.70 on 2026-10-04. Each console completed five consecutive
+launch/elevate/close cycles. All ten runs:
 
-The equivalent integration was exercised for three consecutive launches on a
-test console: each run reported the embedded `helper` path, verified `/data`,
-reached the application UI, and left FTP and elfldr responsive. That is
-functional evidence, not a long-term kernel-stability guarantee.
+- used the embedded one-shot helper (build ID
+  `a91ff858a91effc48c2b62f0f4e92f7b92c2015b3a3d20a793a9946ff4c208e1`);
+- reached UID/GID 0 and completed a PID-specific write/read/remove proof under
+  `/data`;
+- reported exactly two donor processes and reaped both; and
+- left FTP, the kernel-log service and elfldr responsive, with no fatal signal,
+  app-crash, coredump, nonsleeping-lock, trap or panic marker in the captured
+  kernel logs.
+
+That is strong functional evidence for those two tested environments, not a
+universal or long-term kernel-stability guarantee. Other firmware, jailbreak
+and elfldr combinations remain experimental and need the same qualification.
+Never fall back to a raw-pointer helper when Lapy rejects a target.
 
 ## Credits and licenses
 

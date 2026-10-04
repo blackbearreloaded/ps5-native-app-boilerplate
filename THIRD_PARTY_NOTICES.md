@@ -52,7 +52,7 @@ is not linked into any PS5 application, runtime, or package artifact.
 
 The sandbox-elevation build fetches
 [mpereiraesaa's PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon)
-at commit `5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`, invokes its unmodified
+at commit `54a095c0f19161825e845daa760a03b446e654fa`, invokes its unmodified
 `owned-helper` target for the selected application's exact title and packages
 the generated helper ELF with Lapy's MIT license. The shared protocol header
 published upstream is LGPL-2.1-or-later; this repository's application-side

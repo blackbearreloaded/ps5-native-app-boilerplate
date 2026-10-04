@@ -43,6 +43,10 @@ the application before deploying and do not launch it until the command
 finishes. Files removed from the local build are not deleted remotely; clean
 the title directory with `make undeploy` when an exact reset is required.
 
+When selecting another application or example through `APP_PARAM`, deployment
+reads the title ID from that selected metadata file. The build output and FTP
+destination therefore stay scoped to the same title.
+
 Select an image or a non-default port with Make variables:
 
 ```bash

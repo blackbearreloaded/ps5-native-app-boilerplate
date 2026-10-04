@@ -127,6 +127,7 @@ struct Console
         write_file(target + "/eboot.bin", "old program");
         write_file(target + "/sce_sys/param.json", param_json(title, "01.000.000"));
         write_file(target + "/assets/old.txt", "left over from the old version");
+        write_file(target + "/user-note.txt", "keep me");
         write_file(registered + "/appmeta/" + title + "/param.json", "old registered copy");
         environment.roots = {drive + "/homebrew", root + "/absent"};
         environment.drives = {drive};
@@ -149,6 +150,7 @@ struct Console
     {
         return read_file(target + "/eboot.bin") == "old program" &&
                read_file(target + "/assets/old.txt") == "left over from the old version" &&
+               read_file(target + "/user-note.txt") == "keep me" &&
                self_update::kind(drive + "/self-update") == self_update::Kind::absent;
     }
 };
@@ -470,6 +472,7 @@ void test_update_applies()
     }
     CHECK(read_file(console.target + "/assets/new.txt").size() == 200000);
     CHECK(self_update::kind(console.target + "/assets/old.txt") == self_update::Kind::absent);
+    CHECK(read_file(console.target + "/user-note.txt") == "keep me");
     CHECK(self_update::kind(console.drive + "/self-update") == self_update::Kind::absent);
     CHECK(read_file(console.registered + "/appmeta/" + title + "/param.json") ==
           param_json(title, "01.000.010"));
@@ -650,7 +653,8 @@ void test_swap_rolls_back()
     CHECK(self_update::swap_entries(console.target, staged, backup));
     CHECK(read_file(console.target + "/eboot.bin") == "new program");
     CHECK(read_file(backup + "/eboot.bin") == "old program");
-    CHECK(self_update::kind(console.target + "/assets") == self_update::Kind::absent);
+    CHECK(read_file(console.target + "/assets/old.txt") == "left over from the old version");
+    CHECK(read_file(console.target + "/user-note.txt") == "keep me");
 
     CHECK(self_update::title_running(console.sandboxes, title) == 1);
     console.close_app();

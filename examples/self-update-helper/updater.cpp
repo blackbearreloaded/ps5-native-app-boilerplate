@@ -13,6 +13,7 @@
 #include "self_update_sha256.h"
 #include "archive.hpp"
 #include "files.hpp"
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <cstdio>
@@ -435,11 +436,16 @@ int title_running(const std::string &sandboxes, const std::string &title)
 
 bool swap_entries(const std::string &target, const std::string &staged, const std::string &backup)
 {
-    std::vector<std::string> old_names, new_names;
-    if (!list_entries(target, kChildren, old_names) ||
-        !list_entries(staged, kChildren, new_names) || new_names.empty() ||
-        mkdir(backup.c_str(), 0755) != 0)
+    std::vector<std::string> present, new_names;
+    if (!list_entries(target, kChildren, present) || !list_entries(staged, kChildren, new_names) ||
+        new_names.empty() || mkdir(backup.c_str(), 0755) != 0)
         return false;
+    // Move aside only entries the release replaces. Unlisted top-level files
+    // belong to the installation or user and stay in place.
+    std::vector<std::string> old_names;
+    for (const auto &name : present)
+        if (std::find(new_names.begin(), new_names.end(), name) != new_names.end())
+            old_names.push_back(name);
     std::size_t moved = 0, placed = 0;
     bool ok = true;
     for (; ok && moved < old_names.size(); ++moved)

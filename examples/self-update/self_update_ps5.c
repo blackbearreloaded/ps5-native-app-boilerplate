@@ -37,8 +37,15 @@ int sceNetSetsockopt(int socket, int level, int option, const void *value, uint3
 int sceNetSocket(const char *name, int domain, int type, int protocol);
 int sceNetSocketClose(int socket);
 
+#ifndef SELF_UPDATE_HELPER_PATH
 #define SELF_UPDATE_HELPER_PATH "/app0/self-updater.elf"
+#endif
+#ifndef SELF_UPDATE_SEQUENCE_PATH
 #define SELF_UPDATE_SEQUENCE_PATH "/download0/self-update-sequence"
+#endif
+#ifndef SELF_UPDATE_PARAM_PATH
+#define SELF_UPDATE_PARAM_PATH "/app0/sce_sys/param.json"
+#endif
 
 enum
 {
@@ -353,7 +360,7 @@ self_update_check_result self_update_check_self(self_update_offer *offer)
 {
     char title[10];
     char version[12];
-    if (offer == NULL || !update_check_read_param("/app0/sce_sys/param.json", title, version))
+    if (offer == NULL || !update_check_read_param(SELF_UPDATE_PARAM_PATH, title, version))
     {
         if (offer != NULL)
             memset(offer, 0, sizeof(*offer));

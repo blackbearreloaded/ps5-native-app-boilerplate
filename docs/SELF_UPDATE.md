@@ -440,7 +440,8 @@ removes everything it wrote. A refusal is one line, for example
   a notification.
 - **One update at a time**, and one check at a time: the kit isn't reentrant.
 - **Save the user's state before closing.** `/download0` isn't touched by an
-  update; the app's own folder is replaced whole.
+  update. At the app folder's top level, entries present in the release replace
+  entries of the same name; entries absent from the release are preserved.
 
 ## What it needs on the console
 
@@ -465,7 +466,7 @@ Updating means installing code, so every link is checked:
 | The download | The app, then the helper again | The size and SHA-256 in the app's catalog file |
 | The archive's contents | The helper | No absolute or parent paths, links, special files, encryption or duplicates; one app; bounded sizes |
 | What was unpacked | The helper | `sce_sys/param.json` must name this title ID and the listed version |
-| What is replaced | The helper | The one installed folder whose `param.json` names this title ID, at the running version |
+| What is replaced | The helper | Only top-level entries supplied by the release, inside the one installed folder whose `param.json` names this title ID at the running version |
 
 HTTPS certificates are verified throughout (see [libcurl](CURL.md)). What the
 kit does not defend against: the developer's own release being malicious, or
@@ -527,7 +528,7 @@ socket pair with real ZIP archives and real folders:
   isn't on GitHub;
 - a whole update, including that nothing is replaced while the app's sandbox
   exists, and that the old files, the work folder and the console's `sce_sys`
-  copies end up right;
+  copies end up right, while an unlisted top-level user file is preserved;
 - refusals: a download that doesn't match, a connection that drops, an archive
   holding another version or another app, an installed copy at another
   version, two installed copies, no payload loader;
@@ -538,6 +539,33 @@ socket pair with real ZIP archives and real folders:
 The host test replaces the network, the Ed25519 check and the payload loader.
 
 ## Console validation
+
+The current implementation was exercised end to end on firmware 6.02 and
+12.70 on 2026-10-04. Both consoles used the same development A build at
+`01.000.000` (`eboot.bin` SHA-256
+`9fa499fd4a5e941609680d463aa71fd605da3a1a5f88107c3a7e6b0d346c8be7`) and
+downloaded the same 13,185,594-byte B release at `01.000.010` (ZIP SHA-256
+`54c312c7f2f3340068a2c9c65bb1f8f8d3e204dd610e1312aa37fbfaba49a810`,
+`eboot.bin` SHA-256
+`f296b5df5202959a91108acb5d7dbe4d5a1f10cfe0d55b7021bfdc7aabd80243`).
+
+On each console the automated run checked all of the following:
+
+| Checked | Result |
+| --- | --- |
+| GitHub download, advertised size and SHA-256 | Passed |
+| Staging, version/title validation, app close and helper replacement | Passed |
+| Every packaged B file after installation | All 9 files matched the release |
+| Unlisted top-level `user-note.txt` | Preserved byte-for-byte |
+| Work-folder cleanup | Passed |
+| Immediate B relaunch | Reported `refresh_b`, then closed normally |
+| Kernel log and console services | No panic/crash signatures; FTP, kernel log and elfldr responsive |
+
+The fixture uses `SELF_UPDATE_DEV_OFFER`, so this is a validation of the
+release download, integrity, staging and replacement path. Catalog signature
+verification remains covered by the host tests described above.
+
+### Earlier single-console run
 
 Run on a PS5 on 2026-10-03 with the example title installed as a folder under
 `/data/homebrew` and registered by ShadowMountPlus. The console's firmware
