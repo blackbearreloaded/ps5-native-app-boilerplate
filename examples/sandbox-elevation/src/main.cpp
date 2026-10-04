@@ -129,10 +129,13 @@ int main()
     {
         const bool canary_ok = verify_canary(before_open);
         const bool poc_ok = write_poc_marker();
-        report(canary_ok && poc_ok
-                   ? "ELEVATION: filesystem granted; canary + PoC write/read verified"
-                   : (canary_ok ? "ELEVATION: granted; canary ok but PoC file failed"
-                                : "ELEVATION: granted, but file verification failed"));
+        std::array<char, 160> message{};
+        (void)std::snprintf(message.data(), message.size(),
+                            canary_ok && poc_ok
+                                ? "ELEVATION: granted via %s; canary + PoC verified"
+                                : "ELEVATION: granted via %s, but file verification failed",
+                            elevation::path());
+        report(message.data());
     }
     else
     {

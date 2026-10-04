@@ -16,7 +16,8 @@
 | [Microsoft DirectXTex](https://github.com/microsoft/DirectXTex) | `texconv` presentation-image preparation |
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
-| [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | External owned-root elevation daemon and cooperative request contract |
+| [ArkSama/PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon) | Original Lapy project and owned-root design |
+| [mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Exact-title one-shot helper and cooperative elevation protocol |
 
 ## Native build dependencies
 
@@ -49,14 +50,24 @@ is not linked into any PS5 application, runtime, or package artifact.
 
 ## Optional PS5-Lapy-JB-Daemon integration
 
-The sandbox-elevation example implements only the cooperative application
-contract documented by
-[PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) at
-commit `5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`. Credit belongs to Arksama
-(Team PHU), mpereiraesaa, and the Lapy contributors. Lapy remains an external,
-independently built component; this repository does not redistribute its
-kernel source or ELF. Obtain it from upstream and follow the license included
-there.
+The sandbox-elevation build fetches
+[mpereiraesaa's PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon)
+at commit `5b8397b9f2b5f12a7bc2f9c8745a00d1c2dd01ad`, invokes its unmodified
+`owned-helper` target for the selected application's exact title and packages
+the generated helper ELF with Lapy's MIT license. The shared protocol header
+published upstream is LGPL-2.1-or-later; this repository's application-side
+wire implementation is GPL-3.0-or-later.
+
+Lapy was created by
+[ArkSama / Team PHU](https://github.com/ArkSama/PS5-Lapy-JB-Daemon). Credit
+belongs to ArkSama, mpereiraesaa and the Lapy contributors. No Lapy kernel
+source is copied or modified here.
+
+The helper build also uses the pinned `ps5log/1` header from
+[mpereiraesaa/ps5-agc-gears](https://github.com/mpereiraesaa/ps5-agc-gears/tree/1ae1f9182abd2770c131b97419034fb85173c2dc/native/ps5log),
+GPL-3.0-or-later, and the official PS5 Payload SDK v0.40. Those build inputs
+remain under ignored `.deps/lapy/`; the normal application toolchain remains
+the separately pinned Payload SDK v0.42.
 
 ## Optional PacBrew dependencies
 

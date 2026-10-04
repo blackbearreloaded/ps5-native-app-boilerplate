@@ -17,6 +17,7 @@ APP_PARAM ?=
 APP_SCE_SYS ?=
 APP_ASSETS ?= assets
 APP_ROOT_FILES ?=
+APP_LAPY_HELPER ?= 0
 PACBREW_PACKAGES ?=
 PACBREW_INCLUDE_PATHS ?=
 PACBREW_STATIC_ARCHIVES ?=
@@ -45,6 +46,7 @@ export BUILD_JOBS USE_CCACHE
 export HOST_CC HOST_CXX HOST_TEST_CFLAGS HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES APP_WRAP_SYMBOLS
 export APP_SOURCE_DIR APP_PARAM APP_SCE_SYS APP_ASSETS APP_ROOT_FILES
+export APP_LAPY_HELPER
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
 export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
 export TITLE_ID APP_NAME APP_CATEGORY CONTENT_SUFFIX
@@ -77,7 +79,7 @@ test-elevation:
 	@$(HOST_CXX) $(HOST_TEST_CXXFLAGS) -idirafter .deps/native/ps5-payload-sdk/target/include \
 		tests/test_elevation.cpp $(HOST_TEST_LDFLAGS) -o build/tests/test_elevation
 	@build/tests/test_elevation
-	@printf '%s\n' 'Lapy cooperative request, data-ready polling, and proof checks passed.'
+	@printf '%s\n' 'Resident/one-shot Lapy client, exchange, and proof checks passed.'
 
 test-update-check:
 	@mkdir -p build/tests
@@ -154,10 +156,10 @@ packages: $(RUNTIME)
 	@bash tools/build.sh All
 
 sandbox-elevation-ffpfsc: $(RUNTIME)
-	@printf '%s\n' '==> [sandbox-elevation] Building the official-Lapy client proof image'
+	@printf '%s\n' '==> [sandbox-elevation] Building the embedded upstream-Lapy proof image'
 	@APP_SOURCE_DIR=examples/sandbox-elevation/src \
 		APP_PARAM=examples/sandbox-elevation/sce_sys/param.json \
-		APP_SCE_SYS=sce_sys APP_ASSETS= \
+		APP_SCE_SYS=sce_sys APP_ASSETS= APP_LAPY_HELPER=1 \
 		bash tools/build.sh Ffpfsc
 
 update-check-example: $(RUNTIME)
@@ -254,7 +256,7 @@ help:
 	  'make test-self-update      Run the self-update host tests' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
-	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES, APP_WRAP_SYMBOLS' \
+	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES, APP_WRAP_SYMBOLS, APP_LAPY_HELPER' \
 	  'PacBrew variables:   PACBREW_PACKAGES, PACBREW_INCLUDE_PATHS, PACBREW_STATIC_ARCHIVES' \
 	  'Deploy variables:    FTP_PORT=2121, DEPLOY_FORMAT=folder|ffpfsc|ffpkg, DEPLOY_DRY_RUN=0|1' \
 	  'Local defaults:      Copy .env.example to the ignored .env file' \
