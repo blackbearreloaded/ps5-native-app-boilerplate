@@ -338,6 +338,14 @@ void test_pieces()
     CHECK(!self_update_url_allowed("https://github.com@evil.example/o/r/a.zip", 1));
     CHECK(!self_update_url_allowed("https://github.com/o/r/a b.zip", 0));
     CHECK(!self_update_url_allowed(nullptr, 0));
+    // GitHub's redirect carries a long signed query; the catalog's own address never does.
+    const std::string query(1500, 'q');
+    CHECK(self_update_url_allowed(
+        ("https://release-assets.githubusercontent.com/a?jwt=" + query).c_str(), 1));
+    CHECK(!self_update_url_allowed(("https://github.com/o/r/a.zip?x=" + query).c_str(), 0));
+    CHECK(!self_update_url_allowed(
+        ("https://release-assets.githubusercontent.com/a?jwt=" + std::string(5000, 'q')).c_str(),
+        1));
 
     char text[32];
     self_update_time_left(0, 100u << 20, 5.0 * (1u << 20), text, sizeof(text));

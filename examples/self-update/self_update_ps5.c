@@ -151,7 +151,7 @@ static size_t on_stream(char *data, size_t size, size_t count, void *user)
 static int console_download(void *user, const char *url, uint64_t limit, self_update_sink sink,
                             void *sink_user)
 {
-    char current[512];
+    static char current[SELF_UPDATE_MAX_URL]; /* one download at a time */
     int hop;
     (void)user;
     if (!self_update_url_allowed(url, 0))

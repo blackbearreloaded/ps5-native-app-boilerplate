@@ -40,6 +40,9 @@ extern "C"
 #define SELF_UPDATE_API "https://homebrew.page/api/v1/"
 #define SELF_UPDATE_MAX_MANIFEST (512u * 1024u)
 #define SELF_UPDATE_MAX_APP_FILE 65536u
+/* GitHub's redirect to its release file host carries a signed query of about a thousand
+ * characters. */
+#define SELF_UPDATE_MAX_URL 4096u
 
     /* ---- What the console provides (and what tests replace) ------------------------------ */
 

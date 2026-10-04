@@ -124,7 +124,8 @@ int self_update_url_allowed(const char *url, int redirected)
     if (url == NULL)
         return 0;
     length = strlen(url);
-    if (length < 20 || length >= sizeof(((self_update_offer *)0)->artifact))
+    if (length < 20 ||
+        length >= (redirected ? SELF_UPDATE_MAX_URL : sizeof(((self_update_offer *)0)->artifact)))
         return 0;
     for (i = 0; i < length; ++i)
         if ((unsigned char)url[i] <= 0x20 || (unsigned char)url[i] >= 0x7f || url[i] == '\\' ||
