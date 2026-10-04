@@ -162,6 +162,29 @@ bool same_filesystem(const std::string &first, const std::string &second)
     return stat(first.c_str(), &a) == 0 && stat(second.c_str(), &b) == 0 && a.st_dev == b.st_dev;
 }
 
+// The console starts an app only if its files can be read and run by everyone, which is how an
+// app copied to the console arrives (mode 0777, owner and group 0). Unpacked files are made
+// the same; with any other mode the console answers "Can't start the game or app" (found on a
+// console: process creation fails with EACCES).
+bool open_permissions(const std::string &path, unsigned depth = 0)
+{
+    const Kind what = kind(path);
+    if ((what != Kind::directory && what != Kind::file) || depth > 32)
+        return false;
+    if (chmod(path.c_str(), 0777) != 0)
+        return false;
+    (void)chown(path.c_str(), 0, 0); // best effort: the mode is what decides
+    if (what == Kind::file)
+        return true;
+    std::vector<std::string> names;
+    if (!list_entries(path, kArchiveEntries, names))
+        return false;
+    for (const auto &name : names)
+        if (!open_permissions(path + "/" + name, depth + 1))
+            return false;
+    return true;
+}
+
 // ShadowMountPlus copies an app's sce_sys once, when it first registers the
 // title. After an update those copies are brought up to date here. Best effort.
 void refresh_registered(const Environment &environment, const std::string &title,
@@ -568,6 +591,8 @@ int run(const Environment &environment, const Io &io)
     if (!unpacked)
         return fail(error.empty() ? "The update could not be unpacked" : error);
     (void)unlink(archive.c_str());
+    if (!open_permissions(staged))
+        return fail("The update's files could not be prepared");
 
     std::string staged_title, staged_version;
     if (!read_param(staged, staged_title, staged_version) || staged_title != title ||

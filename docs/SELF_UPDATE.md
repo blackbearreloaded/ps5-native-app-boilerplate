@@ -66,7 +66,8 @@ ordinary program doing file work with the rights every payload has.
 5. **Stage.** The helper checks size and SHA-256 again, validates the archive
    (paths, links, sizes, one app only) and unpacks it beside the app. The
    unpacked app must name the same title ID and the version the catalog
-   listed.
+   listed. Its files are given mode 0777, as files copied to the console have:
+   with anything less the console refuses to start the app.
 6. **Apply.** `self_update_apply()` gives the go-ahead and the app closes
    itself. The helper waits until the app's sandbox is gone, then moves the
    app's files out and the new ones in (renames on the same drive), refreshes

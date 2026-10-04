@@ -460,6 +460,14 @@ void test_update_applies()
     CHECK(w.helper_result == 0);
     CHECK(read_file(console.target + "/eboot.bin") == "new program");
     CHECK(read_file(console.target + "/sce_sys/param.json") == param_json(title, "01.000.010"));
+    // The console starts only files everyone may read and run.
+    for (const char *path : {"/eboot.bin", "/sce_sys", "/sce_sys/param.json", "/assets/new.txt"})
+    {
+        struct stat info
+        {
+        };
+        CHECK(stat((console.target + path).c_str(), &info) == 0 && (info.st_mode & 0777) == 0777);
+    }
     CHECK(read_file(console.target + "/assets/new.txt").size() == 200000);
     CHECK(self_update::kind(console.target + "/assets/old.txt") == self_update::Kind::absent);
     CHECK(self_update::kind(console.drive + "/self-update") == self_update::Kind::absent);
