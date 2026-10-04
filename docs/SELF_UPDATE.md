@@ -32,6 +32,37 @@ update, as the update check does.
 
 ## How it works
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant A as App (sandboxed)
+    participant C as homebrew.page
+    participant G as GitHub release
+    participant L as Payload loader (port 9021)
+    participant H as Helper (self-updater.elf)
+
+    A->>C: manifest.json, manifest.sig, apps/TITLEID.json
+    Note over A: verify signature and hashes,<br/>compare content versions
+    A->>U: "Version 1.4.0 is available. Update now?"
+    U->>A: Update now
+    A->>L: sends self-updater.elf
+    L->>H: starts it; the same connection<br/>now links app and helper
+    A->>H: title ID, versions, size, SHA-256
+    H->>A: ready (found the app's folder, made a work folder)
+    loop while downloading
+        G->>A: ZIP bytes over HTTPS
+        A->>H: the same bytes
+        Note over A: progress and time left on screen
+    end
+    Note over H: check size and SHA-256, validate and unpack<br/>beside the app, check title ID and version
+    H->>A: unpacking progress, then "staged"
+    A->>H: apply
+    A->>A: closes itself
+    Note over H: wait until the app is gone,<br/>move old files out and new files in
+    H->>U: notification: "Updated to 1.4.0. Open it again."
+```
+
 Two programs take part, and each does only what it can do well.
 
 | | The app (sandboxed) | The helper (`self-updater.elf`) |
@@ -78,6 +109,9 @@ The app's folder itself stays where it is, so the console's existing mount of
 it keeps pointing at the right place and the next launch reads the new files.
 
 ## Use it in your app
+
+The short version; [Examples](#examples) has the complete code and the build
+steps spelled out.
 
 1. Copy the kits into your sources:
 
@@ -139,6 +173,242 @@ it keeps pointing at the right place and the next launch reads the new files.
    GitHub release, and a higher `contentVersion` in `sce_sys/param.json`
    ([App versions](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/versioning.md)).
    The helper is part of that ZIP, so each release carries its own.
+
+## Examples
+
+### A complete integration
+
+Everything an app needs, with the interface left as four functions of your own
+(`show_offer`, `show_progress`, `show_message`, `button_pressed`). The check
+and the update run on their own threads; the frame function only reads their
+state.
+
+```cpp
+#include "self_update.h"
+
+#include <atomic>
+#include <pthread.h>
+
+extern "C" int sceSystemServiceLoadExec(const char *path, const char **arguments);
+
+enum class UpdateUi { hidden, offer, working, closing, failed };
+
+static self_update_offer offer;          // filled by the check
+static self_update_job job;              // zero-initialised; one update at a time
+static std::atomic<int> check_result{-1}; // -1 while the check runs
+static UpdateUi ui = UpdateUi::hidden;
+static char failure[160];
+
+static void *check_thread(void *)
+{
+    check_result.store(self_update_check_self(&offer));   // blocks on the network
+    return nullptr;
+}
+
+// Once, at start-up.
+void update_begin()
+{
+    pthread_t thread;
+    if (pthread_create(&thread, nullptr, check_thread, nullptr) == 0)
+        pthread_detach(thread);
+}
+
+// Every frame, from the thread that draws.
+void update_frame()
+{
+    if (ui == UpdateUi::hidden && check_result.load() == SELF_UPDATE_AVAILABLE)
+    {
+        check_result.store(-1);   // offer once
+        ui = UpdateUi::offer;
+    }
+
+    if (ui == UpdateUi::offer)
+    {
+        show_offer(offer.name, offer.version, offer.size);   // "Update now" / "Later"
+        if (button_pressed(Button::confirm) &&
+            self_update_start(&job, self_update_console(), &offer) == 1)
+            ui = UpdateUi::working;
+        else if (button_pressed(Button::back))
+            ui = UpdateUi::hidden;
+    }
+    else if (ui == UpdateUi::working)
+    {
+        self_update_status status;
+        self_update_poll(&job, &status);
+        show_progress(status.phase, status.done, status.total, status.time_left);
+
+        if (status.phase == SELF_UPDATE_READY)
+        {
+            // Staged and verified. Save the user's state, then give the go-ahead.
+            if (self_update_apply(&job) == 1)
+                ui = UpdateUi::closing;
+        }
+        else if (status.phase == SELF_UPDATE_FAILED || status.phase == SELF_UPDATE_CANCELLED)
+        {
+            snprintf(failure, sizeof(failure), "%s",
+                     status.phase == SELF_UPDATE_CANCELLED ? "Update cancelled" : status.error);
+            self_update_finish(&job);   // the job can be started again later
+            ui = UpdateUi::failed;
+        }
+        else if (button_pressed(Button::back))
+            self_update_cancel(&job);   // CANCELLED arrives through self_update_poll
+    }
+    else if (ui == UpdateUi::closing)
+    {
+        show_message("Updating. The app closes now.");
+        sceSystemServiceLoadExec("exit", nullptr);   // the helper takes over from here
+    }
+    else if (ui == UpdateUi::failed)
+    {
+        show_message(failure);   // nothing was changed
+        if (button_pressed(Button::confirm))
+            ui = UpdateUi::hidden;
+    }
+}
+```
+
+The example title
+([`examples/self-update/src/main.cpp`](../examples/self-update/src/main.cpp))
+is this same flow with real drawing and controller code, and is what ran on
+the console.
+
+### Showing progress
+
+`self_update_poll` gives everything a progress view needs:
+
+```cpp
+self_update_status status;
+self_update_poll(&job, &status);
+
+const char *title = status.phase == SELF_UPDATE_DOWNLOADING ? "Downloading"
+                  : status.phase == SELF_UPDATE_UNPACKING   ? "Unpacking"
+                  : status.phase == SELF_UPDATE_READY       ? "Finishing"
+                                                             : "Preparing";
+float fraction = status.total != 0 ? (float)status.done / (float)status.total : 0.0f;
+// status.total is 0 until it is known: draw an indeterminate bar then.
+// status.time_left is "about 20 s left", "a few seconds left", or empty.
+// status.rate is bytes per second, smoothed, if you want to show a speed.
+```
+
+What the example title logged on the console, one line a second, shows the
+values over a real update:
+
+```text
+phase=starting    done=0        total=0         left=-
+phase=downloading done=2915799  total=13184595  left=a few seconds left
+phase=downloading done=7405015  total=13184595  left=a few seconds left
+phase=downloading done=11910615 total=13184595  left=a few seconds left
+phase=unpacking   done=0        total=0         left=-
+phase=ready       done=26536616 total=26536616  left=-
+```
+
+### Adding it to an app built from this template
+
+```bash
+# 1. The kits (the update check, libcurl support, the self-update engine).
+cp examples/update-check/{update_check,console_curl}.{h,c} src/
+cp examples/self-update/self_update*.{h,c} src/
+```
+
+```make
+# 2. In the Makefile, before the targets: link libcurl, ship the helper.
+PACBREW_PACKAGES += libcurl
+APP_WRAP_SYMBOLS += fcntl
+APP_ROOT_FILES += build/self-update/self-updater.elf
+
+# 3. At the end of the Makefile: build the helper before the app is packaged.
+app ffpkg ffpfsc packages: self-update-helper
+```
+
+```bash
+# 4. Build and check that the helper is in the package.
+make
+unzip -l dist/PPSA12345.zip | grep self-updater.elf
+```
+
+Then add the code from [A complete integration](#a-complete-integration) and
+draw the four views with your interface.
+
+### Publishing an update
+
+Nothing changes in how you release; the catalog does the rest.
+
+1. Raise `contentVersion` in `sce_sys/param.json` (`01.000.070` to
+   `01.000.080`) and commit it.
+2. `make`, which builds `dist/<TITLEID>.zip` with the app folder at the top
+   and the helper inside.
+3. Publish a GitHub release tagged with the version and attach that ZIP.
+4. The catalog's update job proposes the new release; once it is merged, the
+   catalog lists the new `content_version`, address and SHA-256.
+
+From then on, every installed copy that is older offers the update at its next
+start. For a copy installed as an image, or on a console with no payload
+loader, `self_update_start` ends in `SELF_UPDATE_FAILED` with the reason;
+tell that user about the update instead (`offer.version`, `offer.page`).
+
+### Trying it before your app is listed
+
+The check needs a catalog listing. To try the download, the helper and the
+replacement without one, the example title can take its offer from a file.
+This skips the catalog's signature, so it is for development only.
+
+1. Build the *new* version: raise `contentVersion`, `make
+   self-update-example`, and attach `dist/PPSA99782.zip` to a GitHub release
+   (a pre-release in a test repository is enough). Note its size and SHA-256
+   (`sha256sum dist/PPSA99782.zip`).
+2. Build the *old* version with the offer in its assets:
+
+   ```text
+   01.000.010
+   1.1.0 test
+   https://github.com/<you>/<repository>/releases/download/<tag>/PPSA99782.zip
+   ec361bd2309e37b7ef1a5cb29316b95ecbf4763f8af012cbc703b59df1385dd6
+   13184595
+   ```
+
+   saved as `examples/self-update/assets/offer.txt` (new content version, version name, address,
+   SHA-256, size), and:
+
+   ```bash
+   APP_DEFINITIONS="SELF_UPDATE_DEV_OFFER" make self-update-example
+   ```
+
+3. Install the old version, start it, press Cross on the offer, and start it
+   again after the notification: its first log line shows the new build.
+
+This is how the [console validation](#console-validation) was done.
+
+### What the app and the helper say to each other
+
+One update, as it goes over the connection (`>` app to helper, `<` helper to
+app):
+
+```text
+> PSU1
+> update
+> PPSA12345
+> 01.000.070                  installed content version
+> 01.000.080                  new content version
+> 36383357                    size in bytes
+> 1fece5044d64...a57e80a      SHA-256 of the ZIP
+> My App                      name, for the notification
+> 1.4.0                       version name, for the notification
+< ready
+> (the ZIP, in pieces of up to 1 MiB, each with a 4-byte length; a zero length ends)
+< p 1048576 52428800          bytes unpacked, bytes to unpack
+< p 31457280 52428800
+< staged
+> apply
+< applying
+  (the app closes; the helper replaces the files and posts the notification)
+```
+
+If the connection ends before `apply`, or the app sends `cancel`, the helper
+removes everything it wrote. A refusal is one line, for example
+`fail The download doesn't match the catalog's listing`, which the app shows as
+`status.error`.
+
+## Reference
 
 ### The states
 
