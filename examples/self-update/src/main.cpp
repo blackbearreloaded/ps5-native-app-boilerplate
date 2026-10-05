@@ -177,7 +177,8 @@ void megabytes(char *out, std::size_t size, std::uint64_t bytes) noexcept
 // Development only: takes the offer from /app0/assets/offer.txt instead of the catalog, so the
 // download and the helper can be tried with a title that isn't listed. It skips the catalog's
 // signature, so never ship a build with it. Five lines: the new content version, the version's
-// name, the release ZIP on GitHub, its SHA-256, its size in bytes.
+// name, the release ZIP on GitHub, its SHA-256, its size in bytes. Any lines after those are the
+// release notes.
 bool dev_line(const char *&at, char *out, std::size_t size) noexcept
 {
     std::size_t length = 0;
@@ -210,6 +211,7 @@ self_update_check_result dev_offer() noexcept
         return SELF_UPDATE_UNKNOWN;
     (void)std::snprintf(offer.name, sizeof(offer.name), "Self-Update Example");
     offer.size = std::strtoull(size.data(), nullptr, 10);
+    (void)std::snprintf(offer.notes, sizeof(offer.notes), "%s", at);
     return SELF_UPDATE_AVAILABLE;
 }
 #endif
@@ -231,13 +233,15 @@ void after_check() noexcept
     std::array<char, 380> line{};
     static const char *const names[] = {"available", "up-to-date", "unknown", "untrusted",
                                         "not-installable"};
-    (void)std::snprintf(line.data(), line.size(),
-                        "check result=%s installed=%s available=%s version=%s size=%llu ms=%llu",
-                        names[check_result], offer.installed[0] != '\0' ? offer.installed : "-",
-                        offer.available[0] != '\0' ? offer.available : "-",
-                        offer.version[0] != '\0' ? offer.version : "-",
-                        static_cast<unsigned long long>(offer.size),
-                        static_cast<unsigned long long>(now_ms()));
+    (void)std::snprintf(
+        line.data(), line.size(),
+        "check result=%s installed=%s available=%s version=%s size=%llu notes=%zu%s "
+        "ms=%llu",
+        names[check_result], offer.installed[0] != '\0' ? offer.installed : "-",
+        offer.available[0] != '\0' ? offer.available : "-",
+        offer.version[0] != '\0' ? offer.version : "-", static_cast<unsigned long long>(offer.size),
+        std::strlen(offer.notes), offer.notes_truncated != 0 ? "+" : "",
+        static_cast<unsigned long long>(now_ms()));
     emit(line.data());
     if (check_result == SELF_UPDATE_AVAILABLE)
     {

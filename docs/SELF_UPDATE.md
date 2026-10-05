@@ -151,6 +151,8 @@ steps spelled out.
    // On a worker thread, once per launch:
    if (self_update_check_self(&offer) == SELF_UPDATE_AVAILABLE)
        ask_user("Version %s is available. Update now?", offer.version);
+   // offer.notes holds the release notes, when the release has any: show them
+   // before the user decides (see "Showing what's new").
 
    // When the user says yes:
    self_update_start(&job, self_update_console(), &offer);
@@ -302,6 +304,127 @@ phase=unpacking   done=0        total=0         left=-
 phase=ready       done=26536616 total=26536616  left=-
 ```
 
+### Showing what's new
+
+The catalog publishes what the developer wrote on the release
+([`release_notes`](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/api.md#release-notes)),
+and the check copies it into the offer. It is part of the app's catalog file,
+so the same signature covers it. Let the user read it before choosing:
+
+| Field | Holds |
+| --- | --- |
+| `offer.notes` | Plain UTF-8 text, at most 4,000 characters: lines split by `\n`, list items starting with `- `, a blank line before each heading or paragraph. Empty when the release has no notes |
+| `offer.notes_truncated` | 1 when the catalog cut the notes; the rest is on the release's page (`offer.page` leads there) |
+
+No Markdown or HTML parser is needed. Split on `\n` and decide per line:
+
+```cpp
+// One entry per line of the notes: what it is, and its text.
+enum class NoteKind { gap, bullet, heading, callout, text };
+struct NoteLine { NoteKind kind; std::string_view text; };
+
+std::vector<NoteLine> note_lines(std::string_view notes)
+{
+    std::vector<NoteLine> lines;
+    for (std::size_t at = 0; at <= notes.size();)
+    {
+        const std::size_t end = std::min(notes.find('\n', at), notes.size());
+        std::string_view line = notes.substr(at, end - at);
+        at = end + 1;
+        const auto starts = [&](std::string_view prefix) { return line.substr(0, prefix.size()) == prefix; };
+        if (line.empty())
+            lines.push_back({NoteKind::gap, {}});
+        else if (starts("- "))
+            lines.push_back({NoteKind::bullet, line.substr(2)});
+        // The catalog turns GitHub's "> [!WARNING]" boxes into "Warning: ...".
+        else if (starts("Warning:") || starts("Caution:") || starts("Important:") || starts("Note:") || starts("Tip:"))
+            lines.push_back({NoteKind::callout, line});
+        // A short line without closing punctuation reads as a heading.
+        else if (line.size() <= 48 && std::string_view(".:!?,;)").find(line.back()) == std::string_view::npos)
+            lines.push_back({NoteKind::heading, line});
+        else
+            lines.push_back({NoteKind::text, line});
+    }
+    return lines;
+}
+```
+
+Then wrap each line to your text column and draw it in a scrolling area. What
+works well on a TV, from ProsperoEden's dialog
+([`update.cpp`](https://github.com/blackbearreloaded/ProsperoEden/blob/main/headless/prosperoeden/pe/ui/update.cpp),
+which you can read as a complete implementation):
+
+- Put a **What's new** button between **Update now** and **Skip** only when
+  `offer.notes[0] != '\0'`, and open the notes in a view of their own with
+  **Update now** and **Back** under the text.
+- Scroll a few lines per press and a page on L1/R1; show a scrollbar and fade
+  the text where more is above or below.
+- Break a word that is wider than the column between whole characters (links,
+  and text in languages without spaces).
+- Show the notes as the developer wrote them. They are the developer's words
+  in the developer's language: translate your dialog, not the notes.
+- When `offer.notes_truncated` is set, end with a line saying the rest is on
+  the app's page.
+
+### An app that has filesystem access
+
+An app that leaves its sandbox ([Sandbox elevation](SANDBOX_ELEVATION.md)), or
+that ShadowMountPlus 1.7 gives `/data` and the drives to, may not have `/app0`
+and `/download0` where the kit expects them, and may be installed anywhere
+ShadowMountPlus mounts from (a USB drive, extended storage, its manual list).
+Two things follow.
+
+**Find the app's own files at the console's mount of the running app**, not at
+one install folder. `/system_ex/app/<TITLEID>` is where the console mounts the
+app it runs, whatever the source:
+
+```cpp
+// The app's own folder: /app0 while it is mounted, else the console's mount of
+// the running app, else the usual install folder.
+const std::string &app_dir()
+{
+    static const std::string directory = [] {
+        for (const char *candidate : {"/app0", "/system_ex/app/PPSA12345", "/data/homebrew/PPSA12345"})
+            if (file_exists(std::string(candidate) + "/eboot.bin"))
+                return std::string(candidate);
+        return std::string("/app0");
+    }();
+    return directory;
+}
+```
+
+A fixed `/data/homebrew/<TITLEID>` is not enough: an app copied to
+`/mnt/usb0/homebrew` found none of its files there and closed at start, on
+firmware 4.50 and 13.60 (ProsperoEden 1.000.060; fixed in 1.000.070 with the
+function above).
+
+**Tell the kit where its three files are.** `self_update_ps5.c` takes them
+from these definitions when they are set, and they may be function calls:
+
+```cmake
+# CMake; with a Makefile, the same -D flags.
+target_compile_definitions(my-app PRIVATE
+    "SELF_UPDATE_HELPER_PATH=my_update_path(0)"     # <app folder>/self-updater.elf
+    "SELF_UPDATE_PARAM_PATH=my_update_path(1)"      # <app folder>/sce_sys/param.json
+    "SELF_UPDATE_SEQUENCE_PATH=my_update_path(2)")  # a file in your data folder
+```
+
+```cpp
+extern "C" const char *my_update_path(int which)
+{
+    static const std::string helper = app_dir() + "/self-updater.elf";
+    static const std::string param = app_dir() + "/sce_sys/param.json";
+    static const std::string sequence = data_dir() + "/self-update-sequence";
+    return which == 0 ? helper.c_str() : which == 1 ? param.c_str() : sequence.c_str();
+}
+```
+
+Compile `self_update_ps5.c` with a header that declares `my_update_path`
+(`-include my_paths.h`).
+
+The helper needs nothing: it finds the folder to update itself (see
+[What it needs on the console](#what-it-needs-on-the-console)).
+
 ### Adding it to an app built from this template
 
 ```bash
@@ -448,8 +571,8 @@ removes everything it wrote. A refusal is one line, for example
 | Need | Why | Without it |
 | --- | --- | --- |
 | A payload loader listening on port 9021 | It starts the helper | `SELF_UPDATE_FAILED`: "The update helper couldn't be started. Is the payload loader running?" Nothing is changed |
-| The app installed as a **folder** in a usual place (`/data/homebrew`, `/data/etaHEN/games`, the same on `/mnt/ext0`, `/mnt/ext1`, `/mnt/usb0`-`7`, or an external drive's root) | The helper replaces files in that folder | "The app's folder wasn't found. Apps installed as an image can't update themselves" |
-| Exactly one installed copy, at the running version | So the right files are replaced | A refusal that says which it was |
+| The app installed as a **folder** | The helper replaces files in that folder. It takes the folder ShadowMountPlus mounted the app from (`/user/app/<TITLEID>/mount.lnk`: any scan path, or its manual list); without that record it looks in the usual places (`/data/homebrew`, `/data/etaHEN/games`, the same on `/mnt/ext0`, `/mnt/ext1`, `/mnt/usb0`-`7`, or an external drive's root) | Installed as an image (`mount_img.lnk`): "The app is installed as an image; update it by replacing the image". Not found: "The app's folder wasn't found. Apps installed as an image can't update themselves" |
+| The installed folder at the running version; without ShadowMountPlus's record, exactly one installed copy | So the right files are replaced | A refusal that says which it was |
 | Free space on the app's drive for the ZIP and the unpacked app together | Staging happens before anything is replaced | A refusal before the download, or before unpacking |
 | The app listed in the catalog as a ZIP | The check | `SELF_UPDATE_UNKNOWN` or `SELF_UPDATE_NOT_INSTALLABLE` |
 
@@ -504,7 +627,7 @@ information". Build definitions, for trying it and for scripted console runs:
 | Definition | Effect |
 | --- | --- |
 | `SELF_UPDATE_RUN_TAG=<word>` | Printed in the first line, to tell runs apart |
-| `SELF_UPDATE_DEV_OFFER` | **Development only.** Takes the offer from `/app0/assets/offer.txt` (five lines: new content version, version name, release ZIP on GitHub, SHA-256, size) instead of the catalog. It skips the catalog's signature: never ship a build with it |
+| `SELF_UPDATE_DEV_OFFER` | **Development only.** Takes the offer from `/app0/assets/offer.txt` (five lines: new content version, version name, release ZIP on GitHub, SHA-256, size; any further lines are the release notes) instead of the catalog. It skips the catalog's signature: never ship a build with it |
 | `SELF_UPDATE_AUTO_ACCEPT=<seconds>` | Accepts the offer after that long, as if Cross had been pressed |
 | `SELF_UPDATE_EXIT_AFTER=<seconds>` | Closes the title that long after it has nothing more to do |
 | `SELF_UPDATE_WATCHDOG=<seconds>` | Closes the title that long after it started, whatever else happens, so a scripted run never leaves it open |
@@ -564,6 +687,14 @@ On each console the automated run checked all of the following:
 The fixture uses `SELF_UPDATE_DEV_OFFER`, so this is a validation of the
 release download, integrity, staging and replacement path. Catalog signature
 verification remains covered by the host tests described above.
+
+ProsperoEden, which uses this kit, has since exercised two things the fixture
+does not: the **signed catalog check on a console** (firmware 6.02, 2026-10-05:
+homebrew.page offered 1.000.070 with its release notes to a build reporting
+1.000.060), and an **install on a USB drive** (`/mnt/usb0/homebrew`, firmware
+4.50 and 13.60, confirmed by the testers who reported it). Not yet run on a
+console: the helper taking its folder from `mount.lnk`, and its refusal of an
+image install; both are covered by the host tests.
 
 ### Earlier single-console run
 

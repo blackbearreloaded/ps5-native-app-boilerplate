@@ -160,6 +160,7 @@ struct World
 {
     Console *console = nullptr;
     std::string manifest, signature = std::string(64, 'S'), app_file, archive;
+    std::string extra; // more members for the app's catalog file, each starting with a comma
     int app_status = 200;
     uint64_t stored_sequence = 0;
     bool has_sequence = false, loader = true;
@@ -293,7 +294,7 @@ void publish(World &w, const std::string &version, const std::string &archive, u
                  "\"sha256\":\"" +
                  digest_of(archive) + "\",\"status\":\"available\",\"content_version\":\"" +
                  version + "\",\"format\":\"zip\",\"size\":" + std::to_string(archive.size()) +
-                 ",\"page\":\"https://homebrew.page/app/PPSA12345/\"}";
+                 ",\"page\":\"https://homebrew.page/app/PPSA12345/\"" + w.extra + "}";
     w.manifest = std::string("{\"commit\":\"abc\",\"files\":{\"apps/") + title + ".json\":\"" +
                  digest_of(w.app_file) + "\",\"index.json\":\"" + std::string(64, '0') +
                  "\"},\"schema\":3,\"sequence\":" + std::to_string(sequence) + "}";
@@ -386,6 +387,20 @@ void test_check()
     CHECK(std::string(offer.available) == "01.000.010" && std::string(offer.version) == "1.1.0");
     CHECK(offer.size == archive.size() && std::string(offer.sha256) == digest_of(archive));
     CHECK(w.has_sequence && w.stored_sequence == 72);
+    // No release notes in the catalog file: none in the offer.
+    CHECK(offer.notes[0] == '\0' && offer.notes_truncated == 0);
+    // Release notes arrive as the catalog's plain text, escapes decoded.
+    w.extra =
+        ",\"release_notes\":\"Fixes\\n- one\\n- caf\\u00e9\",\"release_notes_truncated\": true";
+    publish(w, "01.000.010", archive, 72);
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+    CHECK(std::string(offer.notes) == "Fixes\n- one\n- caf\xc3\xa9" && offer.notes_truncated == 1);
+    w.extra = ",\"release_notes\":null,\"release_notes_truncated\":null";
+    publish(w, "01.000.010", archive, 72);
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+    CHECK(offer.notes[0] == '\0' && offer.notes_truncated == 0);
+    w.extra.clear();
+    publish(w, "01.000.010", archive, 72);
     CHECK(self_update_check(&platform, title, "01.000.010", &offer) == SELF_UPDATE_UP_TO_DATE);
     CHECK(self_update_check(&platform, "bad", "01.000.000", &offer) == SELF_UPDATE_UNKNOWN);
 
@@ -570,6 +585,39 @@ void test_refusals()
         CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
         CHECK(failing_job(w, offer, SELF_UPDATE_FAILED) ==
               "More than one copy of the app is installed");
+        CHECK(console.untouched());
+    }
+    {
+        // Two copies, but ShadowMountPlus recorded which one it mounted: that one is updated
+        // (checked up to staging; nothing is replaced before apply).
+        Console console;
+        World w;
+        w.console = &console;
+        world = &w;
+        const std::string second = console.drive + "/homebrew/copy";
+        CHECK(mkdir(second.c_str(), 0755) == 0 && mkdir((second + "/sce_sys").c_str(), 0755) == 0);
+        write_file(second + "/sce_sys/param.json", param_json(title, "01.000.000"));
+        const std::string record = console.registered + "/app";
+        CHECK(mkdir(record.c_str(), 0755) == 0 && mkdir((record + "/" + title).c_str(), 0755) == 0);
+        write_file(record + "/" + title + "/mount.lnk", console.target + "\n");
+        publish(w, "01.000.010", make_archive(title, "01.000.010", "new program"), 5);
+        CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+        CHECK(failing_job(w, offer, SELF_UPDATE_READY).empty());
+        CHECK(console.untouched());
+    }
+    {
+        // Installed as an image (mount_img.lnk, no folder record): refused with the reason.
+        Console console;
+        World w;
+        w.console = &console;
+        world = &w;
+        const std::string record = console.registered + "/app";
+        CHECK(mkdir(record.c_str(), 0755) == 0 && mkdir((record + "/" + title).c_str(), 0755) == 0);
+        write_file(record + "/" + title + "/mount_img.lnk", "/mnt/usb0/homebrew/app.ffpfsc\n");
+        publish(w, "01.000.010", make_archive(title, "01.000.010", "new program"), 5);
+        CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+        CHECK(failing_job(w, offer, SELF_UPDATE_FAILED) ==
+              "The app is installed as an image; update it by replacing the image");
         CHECK(console.untouched());
     }
     {
