@@ -60,7 +60,12 @@ diagnostics.
 
 The runtime sequence is:
 
-1. Probe `/data`; return immediately when access already exists.
+1. Probe `/data`; return immediately when access already exists. Access means a
+   file can be created, written and read back **and** `/data` can be listed.
+   ShadowMountPlus 1.7 mounts `/data` into a sandboxed app: files open and
+   write there, but listing a folder or `lstat` is refused (`EPERM`), the app
+   still runs as uid 1, and libcurl can't start. That is not elevation, so the
+   request goes on to Lapy: Lapy runs only when it is needed.
 2. Publish the cooperative resident request through
    `/download0/elevate_proc` and wait 1.5 seconds.
 3. If a resident service claimed the marker, never launch a second helper for
@@ -69,7 +74,7 @@ The runtime sequence is:
    `/app0/lapy.elf` to the local ELF loader on TCP port 9021 and complete
    upstream's request/prepare/prepared/response exchange on that connection.
 5. Return `Status::ok` only after creating, writing, reading, comparing and
-   removing a PID-specific probe under `/data`.
+   removing a PID-specific probe under `/data`, and listing `/data`.
 
 The jailbreak environment must provide the local ELF loader on port 9021 when
 a resident Lapy service is not already running. `downloadDataSize` must be

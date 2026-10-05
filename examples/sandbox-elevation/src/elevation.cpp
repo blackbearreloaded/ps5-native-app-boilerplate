@@ -9,6 +9,7 @@
 #include <array>
 #include <cerrno>
 #include <cstdio>
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -134,7 +135,19 @@ bool verify_data(pid_t pid, int &open_error) noexcept
         read(file.get(), actual.data(), actual.size()) == static_cast<ssize_t>(actual.size()) &&
         actual == token;
     (void)unlink(path.data());
-    return passed;
+    if (!passed)
+        return false;
+    // ShadowMountPlus 1.7 mounts /data into a sandboxed app: files open and write, but
+    // listing a folder or lstat is refused (EPERM). That is not elevation, so the
+    // request goes on to Lapy, and waits for /data to list once Lapy is done.
+    DIR *folder = opendir("/data");
+    if (!folder)
+    {
+        open_error = errno != 0 ? errno : EPERM;
+        return false;
+    }
+    (void)closedir(folder);
+    return true;
 }
 
 bool wait_for_data(pid_t pid, unsigned polls, int &open_error, bool &proof_failed) noexcept
