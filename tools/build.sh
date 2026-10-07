@@ -14,6 +14,14 @@ case "$format" in folder|ffpkg|ffpfsc|all) ;; *)
     echo "usage: tools/build.sh [Folder|Ffpkg|Ffpfsc|All]" >&2
     exit 2
 esac
+# The compressed .ffpfsc image is switched off for now: the in-app update worker and
+# ProsperoStore install from the ZIP, and a second format invites mismatches. Releases
+# and CI build the ZIP only. ENABLE_FFPFSC=1 brings the image back for local experiments.
+if [[ $format == ffpfsc && ${ENABLE_FFPFSC:-0} != 1 ]]; then
+    echo "The .ffpfsc image is switched off for now; the build produces the app folder and its ZIP." >&2
+    echo "Run 'make' for those, or set ENABLE_FFPFSC=1 to build the image anyway." >&2
+    exit 2
+fi
 # What a build that is not a release calls itself, such as a pull request's number and
 # commit. Checked before anything is built; written into the app folder further down.
 if [[ -n ${BUILD_LABEL:-} ]]; then
@@ -352,7 +360,9 @@ with open(sys.argv[1], "rb") as stream:
         raise SystemExit("FFPKG is missing the UFS2 superblock magic")
 PY
 fi
-if [[ $format == ffpfsc || $format == all ]]; then
+if [[ $format == all && ${ENABLE_FFPFSC:-0} != 1 ]]; then
+    echo "Skipping the .ffpfsc image: switched off for now (ENABLE_FFPFSC=1 builds it)."
+elif [[ $format == ffpfsc || $format == all ]]; then
     mkpfs=$(bash "$root/tools/setup-packaging-dependencies.sh" ffpfsc)
     rm -f -- "$dist/$title_id.ffpfsc"
     "$mkpfs" pack folder --no-adjust-output-file-extension \
@@ -362,4 +372,5 @@ fi
 printf 'Build complete.\nApp folder: %s\n' "$app"
 printf 'Folder ZIP: %s\n' "$dist/$title_id.zip"
 [[ $format != ffpkg && $format != all ]] || printf 'FFPKG:     %s\n' "$dist/$title_id.ffpkg"
-[[ $format != ffpfsc && $format != all ]] || printf 'FFPFSC:    %s\n' "$dist/$title_id.ffpfsc"
+[[ ($format != ffpfsc && $format != all) || ${ENABLE_FFPFSC:-0} != 1 ]] ||
+    printf 'FFPFSC:    %s\n' "$dist/$title_id.ffpfsc"

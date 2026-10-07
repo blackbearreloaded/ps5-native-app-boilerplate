@@ -57,7 +57,7 @@ RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-bu
 	$(wildcard tooling/native/runtime/*.txt)
 HOST_UNIT_TEST := build/tests/demo_renderer_tests
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-ffpfsc update-check-example test-update-check self-update-helper self-update-example test-self-update deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages sandbox-elevation-example sandbox-elevation-ffpfsc update-check-example test-update-check self-update-helper self-update-example test-self-update deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -155,6 +155,13 @@ packages: $(RUNTIME)
 	@printf '%s\n' '==> [packages] Building the app folder and both package formats'
 	@bash tools/build.sh All
 
+sandbox-elevation-example: $(RUNTIME)
+	@printf '%s\n' '==> [sandbox-elevation] Building the embedded upstream-Lapy proof folder and ZIP'
+	@APP_SOURCE_DIR=examples/sandbox-elevation/src \
+		APP_PARAM=examples/sandbox-elevation/sce_sys/param.json \
+		APP_SCE_SYS=sce_sys APP_ASSETS= APP_LAPY_HELPER=1 \
+		bash tools/build.sh Folder
+
 sandbox-elevation-ffpfsc: $(RUNTIME)
 	@printf '%s\n' '==> [sandbox-elevation] Building the embedded upstream-Lapy proof image'
 	@APP_SOURCE_DIR=examples/sandbox-elevation/src \
@@ -247,9 +254,9 @@ help:
 	  'make lint            Run format, tidy, metadata, and shell checks' \
 	  'make check           Run lint and build the skeleton app' \
 	  'make ffpkg           Build the folder and UFS2 .ffpkg image' \
-	  'make ffpfsc          Build the folder and compressed .ffpfsc image' \
-	  'make packages        Build folder, .ffpkg, and .ffpfsc outputs' \
-	  'make sandbox-elevation-ffpfsc  Build the official-Lapy client proof image' \
+	  'make ffpfsc          Switched off for now; ENABLE_FFPFSC=1 builds the .ffpfsc image' \
+	  'make packages        Build folder and .ffpkg (and .ffpfsc with ENABLE_FFPFSC=1)' \
+	  'make sandbox-elevation-example  Build the official-Lapy client proof folder and ZIP' \
 	  'make update-check-example  Build the catalog update-check example title' \
 	  'make test-update-check     Run the update-check host tests' \
 	  'make self-update-example   Build the self-update example title and its helper' \
