@@ -155,7 +155,8 @@ the compiler cache; both settings can also go in `.env`.
 `ccache --show-stats` reports cache usage. `make clean` removes generated
 outputs but preserves ccache's default user cache and downloaded dependencies.
 GitHub Actions uses the same Ninja build, all runner CPUs, and persistent
-dependency and compiler caches. Packaging and asset copying still run on each
+dependency and compiler caches. Every pull request gets an installable build named
+by its number and commit: see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md). Packaging and asset copying still run on each
 requested build so presentation assets stay current.
 
 To use a library from PacBrew, run `make pacbrew-list`, then build with a
@@ -568,6 +569,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | --- | --- |
 | [Getting started](docs/GETTING_STARTED.md) | Host setup, first configuration, build, and output inspection |
 | [Testing](docs/TESTING.md) | Unit, host integration, and PS5 hardware-validation practices |
+| [Pull-request builds](docs/PULL_REQUEST_BUILDS.md) | An installable build per pull request: its artifact name, the label it shows, how to get it |
 | [Application configuration](docs/CONFIGURATION.md) | `param.json`, release tags, Games/Media category, sources, and libraries |
 | [Presentation assets](docs/PRESENTATION_ASSETS.md) | Icon, selection/launch images, ATRAC9 conversion, and format limits |
 | [PacBrew dependencies](docs/PACBREW.md) | Third-party PS5 libraries, selection, caching, and limits |

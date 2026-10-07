@@ -16,7 +16,8 @@ hardware can prove.
 
 GitHub Actions runs `make test-unit` and `make test-integration` as separate
 Ubuntu steps, so every pull request executes both layers with clear failure
-reporting. Host tests must remain deterministic, must never contact a console,
+reporting, and then packages an installable build of the pull request
+([Pull-request builds](PULL_REQUEST_BUILDS.md)). Host tests must remain deterministic, must never contact a console,
 and must be safe to run in parallel with unrelated console work. The first
 unit-test run downloads a pinned GoogleTest archive after verifying its
 SHA-256; later runs reuse `.deps/test/`.
