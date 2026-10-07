@@ -15,6 +15,7 @@
 namespace
 {
 std::array<char, 48> banner{};
+std::array<char, 48> build_label{};
 
 void draw_scene(ps5::demo::Canvas &canvas) noexcept
 {
@@ -37,11 +38,22 @@ void draw_scene(ps5::demo::Canvas &canvas) noexcept
     canvas.text(250, 830, "CIRCLE", 5, Color::white);
     canvas.text(870, 830, "SQUARE", 5, Color::white);
     canvas.text(1420, 830, "TRIANGLE", 5, Color::white);
+
+    // A build that is not a release says which one it is (docs/PULL_REQUEST_BUILDS.md).
+    if (build_label[0] != '\0')
+        canvas.text(120, 960, build_label.data(), 4, Color::yellow);
 }
 } // namespace
 
 int main()
 {
     ps5::demo::read_asset_text("/app0/assets/banner.txt", std::span{banner}, "APP0 ASSET FAILED");
+    // Written by the build when BUILD_LABEL is set; the demo font has capitals only.
+    ps5::demo::read_asset_text("/app0/build-label.txt", std::span{build_label}, "");
+    for (char &character : build_label)
+    {
+        if (character >= 'a' && character <= 'z')
+            character = static_cast<char>(character - 'a' + 'A');
+    }
     ps5::demo::run(draw_scene, banner.data());
 }
