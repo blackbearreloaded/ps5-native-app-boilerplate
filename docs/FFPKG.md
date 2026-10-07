@@ -4,9 +4,13 @@ Every application or package build creates and validates
 `dist/<TITLE_ID>/`. The Make targets map to the same PowerShell
 `-OutputFormat` selections:
 
-All formats remain available for local development. Tagged GitHub Releases
-attach the complete compressed `.ffpfsc` image, a ZIP of the validated
-directory-style application, and their shared `SHA256SUMS`.
+Tagged GitHub Releases and every CI build attach a ZIP of the validated
+directory-style application and its `SHA256SUMS`, and nothing else.
+
+The compressed `.ffpfsc` image is switched off for now, to prevent compatibility issues with
+the in-app update worker and ProsperoStore, which install from the ZIP.
+`make ffpfsc` stops with a message; `ENABLE_FFPFSC=1 make ffpfsc` builds the image for a
+local experiment, and `make packages` skips it unless that variable is set.
 
 | Make target / selection | Additional output | Packaging tool |
 | --- | --- | --- |
@@ -33,6 +37,9 @@ they unpack it.
 `-OutputFormat Ffpkg` in the Windows PowerShell frontend.
 
 ## Compressed FFPFSC
+
+Switched off for now (see the top of this page); this section describes what
+`ENABLE_FFPFSC=1` builds.
 
 MkPFS creates the console-compatible, exFAT-wrapped compressed form directly
 from the validated app folder:

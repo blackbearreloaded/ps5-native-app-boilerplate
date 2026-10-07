@@ -214,6 +214,25 @@ class ToolTests(unittest.TestCase):
         self.assertLess(build.index("BUILD_LABEL must be"), build.index("ninja_run\n\napp="))
         self.assertIn('"/app0/build-label.txt"', (ROOT / "src/main.cpp").read_text())
 
+    def test_automation_builds_the_zip_only(self):
+        workflow = (ROOT / ".github/workflows/tooling.yml").read_text(encoding="utf-8")
+        for line in workflow.splitlines():
+            if "ffpfsc" in line.lower():
+                self.assertIn("switched off", line)
+        self.assertIn("run: make app", workflow)
+        self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
+        self.assertIn('assets=("release/$FOLDER_ZIP" "release/$CHECKSUM")', workflow)
+        # Asked for by name, the image is refused before anything is built.
+        result = subprocess.run(
+            ["bash", str(ROOT / "tools/build.sh"), "Ffpfsc"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "ENABLE_FFPFSC": "0"},
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("switched off for now", result.stderr)
+
     def test_native_writer_anchors_relro_and_checks_load_congruence(self):
         source = (ROOT / "tooling/native/sce_module_writer.cpp").read_text(
             encoding="utf-8"

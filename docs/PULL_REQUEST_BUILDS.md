@@ -29,7 +29,7 @@ Two details are deliberate:
    **Actions**).
 2. Download the artifact named `<repository>-PR<number>-<commit>` from the run's
    **Artifacts** list. GitHub requires a signed-in account for this.
-3. Unpack it: it holds the app's ZIP, its image, and `SHA256SUMS`. Check the files with
+3. Unpack it: it holds the app's ZIP and `SHA256SUMS`. Check the files with
    `sha256sum -c SHA256SUMS`, then install as described in [Deployment](DEPLOYMENT.md).
 
 A first-time contributor's pull request does not build until a maintainer approves the
