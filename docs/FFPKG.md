@@ -25,6 +25,9 @@ make packages
 The release workflow uses Python's standard-library `zipfile` module to archive
 `dist/<TITLE_ID>/` as `<TITLE_ID>.zip`. The ZIP is a distribution convenience,
 not another console filesystem format; extract it before directory deployment.
+Every entry is stored with permissions `0777` (`tools/zip-open-modes.py`): the console only
+starts an app whose files are open to every user, and some tools keep a ZIP's permissions when
+they unpack it.
 
 `-Ffpkg` remains accepted as a compatibility alias for
 `-OutputFormat Ffpkg` in the Windows PowerShell frontend.
