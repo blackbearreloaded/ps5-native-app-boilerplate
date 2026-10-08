@@ -222,6 +222,25 @@ class ToolTests(unittest.TestCase):
         self.assertIn("run: make app", workflow)
         self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
         self.assertIn('assets=("release/$FOLDER_ZIP" "release/$CHECKSUM")', workflow)
+        # The finished ZIP, and only the ZIP, is attested before it is uploaded: pinned action,
+        # never for a pull request or in a private repository.
+        attest = workflow.index("- name: Attest the release ZIP")
+        upload = workflow.index("- name: Upload build")
+        self.assertLess(workflow.index("- name: Write release checksums"), attest)
+        self.assertLess(attest, upload)
+        step = workflow[attest:upload]
+        self.assertIn(
+            "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2", step
+        )
+        self.assertIn(
+            "if: github.event_name != 'pull_request' && !github.event.repository.private", step
+        )
+        self.assertIn("subject-path: dist/${{ env.TITLE_ID }}.zip\n", step)
+        self.assertNotIn("SHA256SUMS", step)
+        build_job = workflow[workflow.index("\n  build:") : workflow.index("\n  release:")]
+        for permission in ("contents: read", "id-token: write", "attestations: write"):
+            self.assertIn(f"      {permission}\n", build_job)
+        self.assertNotIn("id-token", workflow.replace(build_job, ""))
         # Asked for by name, the image is refused before anything is built.
         result = subprocess.run(
             ["bash", str(ROOT / "tools/build.sh"), "Ffpfsc"],

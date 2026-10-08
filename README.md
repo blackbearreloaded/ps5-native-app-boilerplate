@@ -273,7 +273,9 @@ git push origin 01.002.003
 
 The workflow rejects a tag that differs from `contentVersion` and publishes
 the verified app-folder ZIP and its `SHA256SUMS` under that version. The ZIP contains
-the complete application and generated `libc.prx`. The compressed `.ffpfsc` image is switched off for now, to prevent compatibility issues with the in-app update worker and ProsperoStore, which install from the ZIP.
+the complete application and generated `libc.prx`. A release ZIP built by the workflow can be
+checked with `gh attestation verify <ZIP> -R blackbearreloaded/ps5-native-app-boilerplate`
+(GitHub CLI); this covers releases built by GitHub Actions from now on, not earlier ones. The compressed `.ffpfsc` image is switched off for now, to prevent compatibility issues with the in-app update worker and ProsperoStore, which install from the ZIP.
 `ENABLE_FFPFSC=1 make ffpfsc` still builds one locally. See [Application
 configuration](docs/CONFIGURATION.md) for every metadata field.
 

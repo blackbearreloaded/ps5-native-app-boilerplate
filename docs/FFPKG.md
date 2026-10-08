@@ -33,6 +33,22 @@ Every entry is stored with permissions `0777` (`tools/zip-open-modes.py`): the c
 starts an app whose files are open to every user, and some tools keep a ZIP's permissions when
 they unpack it.
 
+Once the ZIP is final, the workflow signs a build-provenance attestation for it (the
+`Attest the release ZIP` step, `actions/attest`): a record, kept by GitHub, that this exact
+file was built by this workflow from this commit. The step runs under two conditions: the run
+is not a pull request (a fork's run cannot sign), and the repository is public (attestations
+in a private repository need a plan that includes them). The build job holds `id-token: write`
+and `attestations: write` for this step alone. The release publishes the same file, so nothing
+is attached to it: the attestation is found by the file's hash. Anyone can check a downloaded
+ZIP with the GitHub CLI:
+
+```bash
+gh attestation verify <TITLE_ID>.zip -R <owner>/<repository>
+```
+
+Only builds made by the workflow since this step was added are covered; an older release, or
+a ZIP built on a PC, has no attestation and the command says so.
+
 `-Ffpkg` remains accepted as a compatibility alias for
 `-OutputFormat Ffpkg` in the Windows PowerShell frontend.
 
