@@ -6,10 +6,10 @@ of the app, kept for 14 days, that a reviewer can put on a console before mergin
 
 ## What a pull request produces
 
-| | Pull request | Push to `main`, tag |
+| | Pull request | Tag, or a run started by hand |
 | --- | --- | --- |
 | Artifact name | `<repository>-PR<number>-<commit>` | `ps5-native-app-boilerplate-<commit>` |
-| `<commit>` | First seven characters of the pull request's own head commit | The pushed commit |
+| `<commit>` | First seven characters of the pull request's own head commit | The commit built |
 | Label inside the app | `PR <number>, <commit>` | None |
 | `contentVersion` | Unchanged | Unchanged |
 
@@ -66,7 +66,7 @@ BUILD_LABEL="pacing test 2" make
 ## Using this in your project
 
 `tools/init-project.sh` leaves the workflow as it is. The pull-request name follows the
-repository's name by itself. The name used for pushes and tags,
+repository's name by itself. The name used for tags and runs started by hand,
 `ps5-native-app-boilerplate-<commit>`, appears twice in the workflow (the upload, and the
 release job's download); rename both together if you want your project's name there.
 
