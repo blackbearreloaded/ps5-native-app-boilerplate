@@ -11,11 +11,9 @@ boundaries.
 
 The application and all repository-owned build tools are native C/C++. LLVM
 handles ordinary linking; a small project-owned converter emits PS5 metadata
-and the development FSELF. The public SDK, static zlib, and optional packaging
-dependencies are fetched on demand into the ignored `.deps/` cache. No
-proprietary Sony SDK file or proprietary runtime module is required. The
-optional `.ffpkg` target builds the external UFS2Tool with .NET 8 or newer;
-the application and repository-owned tooling remain C/C++.
+and the development FSELF. The public SDK and static zlib are fetched on
+demand into the ignored `.deps/` cache. No proprietary Sony SDK file or
+proprietary runtime module is required.
 
 ## Project status
 
@@ -24,7 +22,7 @@ the application and repository-owned tooling remain C/C++.
 | Host build | C/C++ pipeline verified through Make on Linux/WSL and PowerShell on Windows |
 | PS5 hardware | Current C++20 skeleton and runtime verified on firmware 6.02 and 12.70 |
 | Runtime shim | Project-authored, reproducible artifact with no proprietary implementation code |
-| Output formats | Title folder and its ZIP; optional UFS2 `.ffpkg` |
+| Output formats | Title folder and its ZIP |
 | Update check | Optional kit; run on a PS5 against the homebrew.page catalog (see [Update check](#update-check)) |
 | CI | Runs the native Linux Make workflow and reproduces the runtime shim |
 
@@ -63,7 +61,7 @@ the two fit together.
 | Native build | C++20 with RAII, libc++ headers, unique ownership, and C-library interoperability |
 | Linking and FSELF | LLVM lld plus the repository-owned C++ PS5 converter and FSELF writer |
 | Runtime companion | Source-reproducible, independently authored `libc.prx` loader shim |
-| Packaging | Folder and its ZIP, and an optional UFS2 `.ffpkg` image |
+| Packaging | Folder and its ZIP |
 | App assets | Recursive read-only `assets/` packaging at `/app0/assets/` |
 | Presentation | Replaceable icon, 4K BC7 backgrounds, and ATRAC9 selection audio |
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
@@ -114,9 +112,7 @@ The optional presentation-asset converter uses DirectXTex `texconv` and
 Windows PowerShell, either directly or through its Bash frontend in WSL.
 FFmpeg may run on Windows or inside WSL. ATRAC9 output additionally
 requires a compatible `ps4_at9tool.exe` that you are legally permitted to use;
-the repository neither bundles nor downloads that encoder. Packaging tools are
-fetched into `.deps/` automatically when their Make targets are requested.
-`make ffpkg` additionally requires the .NET SDK 8 or newer to build UFS2Tool.
+the repository neither bundles nor downloads that encoder.
 
 The first build fetches the pinned public PS5 payload SDK and zlib 1.3.2 source
 archives, verifies both digests, compiles zlib into the ignored
@@ -189,19 +185,13 @@ make undeploy PS5_HOST=192.168.1.100
 
 The default FTP port is `2121`. Each file is uploaded under a hidden temporary
 name and promoted only after its transfer completes; `eboot.bin` and
-`sce_sys/param.json` are published last. Use
-`DEPLOY_FORMAT=ffpkg` when a UFS2 image is specifically required. Launching and
+`sce_sys/param.json` are published last. Launching and
 closing the app remain explicit manual steps. `undeploy` does not unregister a
 Shell entry. See [Deployment](docs/DEPLOYMENT.md).
 
-Do not relaunch an `.ffpkg` image immediately after replacing the same pathname:
-ShadowMountPlus may still have the previous image mounted. Fully close the
-title, deploy the completed replacement, then either restart ShadowMountPlus
-cleanly or restart the PS5. Afterward, start the approved services normally and
-wait for ShadowMountPlus to rediscover the title before launching it. Keeping
-the same title ID preserves separate `/download0` and save data; `/temp0` is
-temporary, `/app0` comes from the new image, and Shell presentation metadata
-may remain cached.
+Keeping the same title ID preserves separate `/download0` and save data;
+`/temp0` is temporary, `/app0` comes from the deployed folder, and Shell
+presentation metadata may remain cached.
 
 For values used repeatedly on one workstation, copy the tracked example to the
 hidden, ignored local configuration and edit it:
@@ -215,8 +205,8 @@ not app identity or release metadata. Keep those in `sce_sys/param.json`.
 
 Run `make help` to list the focused targets. `make deps` only prefetches native
 dependencies, `make libc` forces runtime reproduction, `make lint` runs
-clang-format and clang-tidy, `make test` runs the host unit and integration
-suites, and `make ffpkg` adds the optional UFS2 `.ffpkg` image to the folder and its ZIP. On Windows
+clang-format and clang-tidy, and `make test` runs the host unit and integration
+suites. On Windows
 PowerShell, `./build.ps1` and
 `./tools/rebuild-libc.ps1` remain equivalent supported entry points.
 
@@ -360,7 +350,7 @@ unpacks it and puts the new version in place once the app has closed.
    APP_WRAP_SYMBOLS += fcntl
    APP_ROOT_FILES += build/self-update/self-updater.elf
 
-   app ffpkg: self-update-helper
+   app: self-update-helper
    ```
 
 2. Check, ask, start, and close when it is staged:
@@ -522,7 +512,6 @@ constraints and ready-made `.at9` handling are documented in
 | --- | --- |
 | `dist/<TITLE_ID>/` | Complete directory-style application |
 | `dist/<TITLE_ID>.zip` | Archive of the application folder, generated by every app build |
-| `dist/<TITLE_ID>.ffpkg` | Optional uncompressed UFS2 image |
 | `build/` | Generated compiler, linker, and validation intermediates |
 | `runtime/libc.prx` | Generated loader shim; also copied to `sce_module/` |
 
@@ -576,7 +565,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | [Application configuration](docs/CONFIGURATION.md) | `param.json`, release tags, Games/Media category, sources, and libraries |
 | [Presentation assets](docs/PRESENTATION_ASSETS.md) | Icon, selection/launch images, ATRAC9 conversion, and format limits |
 | [PacBrew dependencies](docs/PACBREW.md) | Third-party PS5 libraries, selection, caching, and limits |
-| [Build output formats](docs/FFPKG.md) | Folder, ZIP, and `.ffpkg` generation; how a release is published |
+| [Build output and release ZIP](docs/RELEASE_ZIP.md) | The folder and its ZIP; how a release is published |
 | [Native build tooling](docs/NATIVE_TOOLING.md) | LLVM boundary and C++ converter/FSELF commands |
 | [Clean-room runtime shim](docs/RUNTIME_SHIM.md) | Design, hashes, compatibility, and deterministic reproduction |
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |

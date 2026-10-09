@@ -7,8 +7,6 @@
 | [ps5-payload-dev/sdk](https://github.com/ps5-payload-dev/sdk) | Public PS5 headers, libc++ headers, sysroot, and Clang target support |
 | [ps5-payload-dev/pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo) | Optional prebuilt PS5 ports and static libraries |
 | [SvenGDK/SharpProspero](https://github.com/SvenGDK/SharpProspero) | Source of the ELF converter and FSELF writer in `tooling/native/` (GPL-3.0) |
-| [SvenGDK/UFS2Tool](https://github.com/SvenGDK/UFS2Tool) | Optional UFS2 `.ffpkg` generation |
-| [sinajet/PSFFPKG](https://github.com/sinajet/PSFFPKG) | Public `.ffpkg` procedure used as a format reference |
 | [LLVM/Clang](https://github.com/llvm/llvm-project) | Native compiler |
 | [GoogleTest](https://github.com/google/googletest) | Pinned host-only C++ unit-test framework |
 | [zlib](https://zlib.net/) | Pinned source-built compression library used by the host FSELF tool |
@@ -105,14 +103,6 @@ helper (`examples/self-update-helper`) and its host test link it; an
 application that ships that helper ships miniz and must carry its notice. The
 helper's archive validation and file helpers are original BlackBearReloaded
 code (GPL-3.0-or-later), taken from the ProsperoStore project.
-
-## Optional UFS2Tool dependency
-
-When `.ffpkg` output is requested, the platform bootstrapper fetches
-[SvenGDK/UFS2Tool](https://github.com/SvenGDK/UFS2Tool) at commit
-`b5307a60d5b4e3a68ba680e0e33cfadf05017c77` into the ignored
-`.deps/UFS2Tool` cache and builds it with the host .NET SDK. UFS2Tool is
-BSD-2-Clause software and is not distributed by this repository.
 
 ## Independently authored runtime shim
 
