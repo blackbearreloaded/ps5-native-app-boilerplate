@@ -55,7 +55,6 @@ jobs:
             .deps/native
             .deps/test
             .deps/pacbrew
-            .deps/MkPFS
           key: deps-${{ runner.os }}-${{ runner.arch }}-ubuntu24-python313-${{ hashFiles('tools/setup-*-dependencies.sh') }}
 
       - name: Restore compiler cache
@@ -144,7 +143,7 @@ jobs:
         run: cd runtime && sha256sum -c libc.prx.sha256
 
       # The ZIP is the one release format: the in-app update worker and ProsperoStore
-      # install from it. The compressed .ffpfsc image is switched off for now.
+      # install from it.
       - name: Build the release folder and ZIP
         run: make app
 

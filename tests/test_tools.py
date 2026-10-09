@@ -216,9 +216,19 @@ class ToolTests(unittest.TestCase):
 
     def test_automation_builds_the_zip_only(self):
         workflow = (ROOT / ".github/workflows/tooling.yml").read_text(encoding="utf-8")
-        for line in workflow.splitlines():
-            if "ffpfsc" in line.lower():
-                self.assertIn("switched off", line)
+        # The compressed image is gone: nothing that builds may name it or its tool again.
+        build_files = (
+            ".github/workflows/tooling.yml",
+            "Makefile",
+            "build.ps1",
+            "tools/build.sh",
+            "tools/setup-packaging-dependencies.sh",
+        )
+        for name in build_files:
+            text = (ROOT / name).read_text(encoding="utf-8").lower()
+            self.assertNotIn("ffpfsc", text, name)
+            self.assertNotIn("mkpfs", text, name)
+        self.assertFalse((ROOT / "tools/setup-mkpfs-tooling.ps1").exists())
         self.assertIn("run: make app", workflow)
         self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
         self.assertIn('assets=("release/$FOLDER_ZIP" "release/$CHECKSUM")', workflow)
@@ -241,16 +251,16 @@ class ToolTests(unittest.TestCase):
         for permission in ("contents: read", "id-token: write", "attestations: write"):
             self.assertIn(f"      {permission}\n", build_job)
         self.assertNotIn("id-token", workflow.replace(build_job, ""))
-        # Asked for by name, the image is refused before anything is built.
-        result = subprocess.run(
-            ["bash", str(ROOT / "tools/build.sh"), "Ffpfsc"],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "ENABLE_FFPFSC": "0"},
-            check=False,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("switched off for now", result.stderr)
+        # Asked for by name, the removed formats are refused before anything is built.
+        for removed in ("Ffpfsc", "All"):
+            result = subprocess.run(
+                ["bash", str(ROOT / "tools/build.sh"), removed],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2, removed)
+            self.assertIn("usage: tools/build.sh [Folder|Ffpkg]", result.stderr)
 
     def test_native_writer_anchors_relro_and_checks_load_congruence(self):
         source = (ROOT / "tooling/native/sce_module_writer.cpp").read_text(

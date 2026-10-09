@@ -7,23 +7,14 @@ Every application or package build creates and validates
 Tagged GitHub Releases and every CI build attach a ZIP of the validated
 directory-style application and its `SHA256SUMS`, and nothing else.
 
-The compressed `.ffpfsc` image is switched off for now, to prevent compatibility issues with
-the in-app update worker and ProsperoStore, which install from the ZIP.
-`make ffpfsc` stops with a message; `ENABLE_FFPFSC=1 make ffpfsc` builds the image for a
-local experiment, and `make packages` skips it unless that variable is set.
-
 | Make target / selection | Additional output | Packaging tool |
 | --- | --- | --- |
 | `make app` / `Folder` | None | None |
 | `make ffpkg` / `Ffpkg` | `dist/<TITLE_ID>.ffpkg` | UFS2Tool |
-| `make ffpfsc` / `Ffpfsc` | `dist/<TITLE_ID>.ffpfsc` | MkPFS |
-| `make packages` / `All` | Both images | Both tools |
 
 ```bash
 make app
 make ffpkg
-make ffpfsc
-make packages
 ```
 
 The release workflow uses Python's standard-library `zipfile` module to archive
@@ -51,32 +42,6 @@ a ZIP built on a PC, has no attestation and the command says so.
 
 `-Ffpkg` remains accepted as a compatibility alias for
 `-OutputFormat Ffpkg` in the Windows PowerShell frontend.
-
-## Compressed FFPFSC
-
-Switched off for now (see the top of this page); this section describes what
-`ENABLE_FFPFSC=1` builds.
-
-MkPFS creates the console-compatible, exFAT-wrapped compressed form directly
-from the validated app folder:
-
-```text
-python -m mkpfs pack folder --no-adjust-output-file-extension \
-  --version PS5 --verify \
-  <app-directory> <title.ffpfsc>
-```
-
-On first use, `tools/setup-packaging-dependencies.sh` or the equivalent
-PowerShell bootstrapper fetches the pinned
-[PSBrew/MkPFS](https://github.com/PSBrew/MkPFS) revision into the ignored
-`.deps/MkPFS` cache and installs its dependencies under that ignored checkout;
-Linux/WSL uses `.venv-linux` and PowerShell uses `.venv`. The repository does
-not distribute MkPFS source or binaries. Python 3.9 or newer with `venv`
-support is required.
-
-The build uses MkPFS's default wrapped-folder mode because upstream documents
-it as the maximum-compatibility `.ffpfsc` layout. It does not use the advanced
-direct raw-PFS mode.
 
 ## UFS2 FFPKG
 

@@ -18,13 +18,13 @@ Set `APP_LAPY_HELPER=1` for an application that compiles the client:
 APP_SOURCE_DIR=examples/sandbox-elevation/src \
 APP_PARAM=examples/sandbox-elevation/sce_sys/param.json \
 APP_SCE_SYS=sce_sys APP_ASSETS= APP_LAPY_HELPER=1 \
-bash tools/build.sh Ffpfsc
+bash tools/build.sh Folder
 ```
 
 Or build the included proof title:
 
 ```bash
-make sandbox-elevation-ffpfsc
+make sandbox-elevation-example
 ```
 
 The helper title is read from the selected `param.json`; wildcard helpers are

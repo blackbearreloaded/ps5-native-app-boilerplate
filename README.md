@@ -24,7 +24,7 @@ the application and repository-owned tooling remain C/C++.
 | Host build | C/C++ pipeline verified through Make on Linux/WSL and PowerShell on Windows |
 | PS5 hardware | Current C++20 skeleton and runtime verified on firmware 6.02 and 12.70 |
 | Runtime shim | Project-authored, reproducible artifact with no proprietary implementation code |
-| Output formats | Title folder and its ZIP; UFS2 `.ffpkg`; compressed `.ffpfsc` switched off for now |
+| Output formats | Title folder and its ZIP; optional UFS2 `.ffpkg` |
 | Update check | Optional kit; run on a PS5 against the homebrew.page catalog (see [Update check](#update-check)) |
 | CI | Runs the native Linux Make workflow and reproduces the runtime shim |
 
@@ -63,7 +63,7 @@ the two fit together.
 | Native build | C++20 with RAII, libc++ headers, unique ownership, and C-library interoperability |
 | Linking and FSELF | LLVM lld plus the repository-owned C++ PS5 converter and FSELF writer |
 | Runtime companion | Source-reproducible, independently authored `libc.prx` loader shim |
-| Packaging | Folder, optional UFS2 `.ffpkg`, and optional compressed `.ffpfsc` outputs |
+| Packaging | Folder and its ZIP, and an optional UFS2 `.ffpkg` image |
 | App assets | Recursive read-only `assets/` packaging at `/app0/assets/` |
 | Presentation | Replaceable icon, 4K BC7 backgrounds, and ATRAC9 selection audio |
 | Third-party libraries | Optional pinned PacBrew sysroot with declarative static linking |
@@ -189,12 +189,12 @@ make undeploy PS5_HOST=192.168.1.100
 
 The default FTP port is `2121`. Each file is uploaded under a hidden temporary
 name and promoted only after its transfer completes; `eboot.bin` and
-`sce_sys/param.json` are published last. Use `DEPLOY_FORMAT=ffpfsc` or
-`DEPLOY_FORMAT=ffpkg` when an image is specifically required. Launching and
+`sce_sys/param.json` are published last. Use
+`DEPLOY_FORMAT=ffpkg` when a UFS2 image is specifically required. Launching and
 closing the app remain explicit manual steps. `undeploy` does not unregister a
 Shell entry. See [Deployment](docs/DEPLOYMENT.md).
 
-Do not relaunch an `.ffpfsc` immediately after replacing the same pathname:
+Do not relaunch an `.ffpkg` image immediately after replacing the same pathname:
 ShadowMountPlus may still have the previous image mounted. Fully close the
 title, deploy the completed replacement, then either restart ShadowMountPlus
 cleanly or restart the PS5. Afterward, start the approved services normally and
@@ -216,7 +216,7 @@ not app identity or release metadata. Keep those in `sce_sys/param.json`.
 Run `make help` to list the focused targets. `make deps` only prefetches native
 dependencies, `make libc` forces runtime reproduction, `make lint` runs
 clang-format and clang-tidy, `make test` runs the host unit and integration
-suites, and `make packages` emits the folder, `.ffpkg`, and `.ffpfsc` forms. On Windows
+suites, and `make ffpkg` adds the optional UFS2 `.ffpkg` image to the folder and its ZIP. On Windows
 PowerShell, `./build.ps1` and
 `./tools/rebuild-libc.ps1` remain equivalent supported entry points.
 
@@ -275,8 +275,7 @@ The workflow rejects a tag that differs from `contentVersion` and publishes
 the verified app-folder ZIP and its `SHA256SUMS` under that version. The ZIP contains
 the complete application and generated `libc.prx`. A release ZIP built by the workflow can be
 checked with `gh attestation verify <ZIP> -R blackbearreloaded/ps5-native-app-boilerplate`
-(GitHub CLI); this covers releases built by GitHub Actions from now on, not earlier ones. The compressed `.ffpfsc` image is switched off for now, to prevent compatibility issues with the in-app update worker and ProsperoStore, which install from the ZIP.
-`ENABLE_FFPFSC=1 make ffpfsc` still builds one locally. See [Application
+(GitHub CLI); this covers releases built by GitHub Actions from now on, not earlier ones. See [Application
 configuration](docs/CONFIGURATION.md) for every metadata field.
 
 The target uses C++20 with exceptions and RTTI disabled. Allocation-free
@@ -357,7 +356,7 @@ unpacks it and puts the new version in place once the app has closed.
    APP_WRAP_SYMBOLS += fcntl
    APP_ROOT_FILES += build/self-update/self-updater.elf
 
-   app ffpkg ffpfsc packages: self-update-helper
+   app ffpkg: self-update-helper
    ```
 
 2. Check, ask, start, and close when it is staged:
@@ -423,7 +422,7 @@ treat a conditional path as available until the application verifies it.
 | `/data/`, `/user/` | Outside the supported app sandbox | Do not use from a normal application. Paths seen by payloads or FTP services do not imply application access. |
 
 `/download0` and mounted save data are separate from `/app0`, so replacing an
-application folder or `.ffpfsc` does not inherently replace them. Provide an
+application folder or image does not inherently replace them. Provide an
 export/import path for data that must survive title removal or cache clearing.
 
 ### Presentation assets
@@ -520,7 +519,6 @@ constraints and ready-made `.at9` handling are documented in
 | `dist/<TITLE_ID>/` | Complete directory-style application |
 | `dist/<TITLE_ID>.zip` | Archive of the application folder, generated by every app build |
 | `dist/<TITLE_ID>.ffpkg` | Optional uncompressed UFS2 image |
-| `dist/<TITLE_ID>.ffpfsc` | Compressed PFS image; switched off for now (`ENABLE_FFPFSC=1`) |
 | `build/` | Generated compiler, linker, and validation intermediates |
 | `runtime/libc.prx` | Generated loader shim; also copied to `sce_module/` |
 
@@ -574,7 +572,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | [Application configuration](docs/CONFIGURATION.md) | `param.json`, release tags, Games/Media category, sources, and libraries |
 | [Presentation assets](docs/PRESENTATION_ASSETS.md) | Icon, selection/launch images, ATRAC9 conversion, and format limits |
 | [PacBrew dependencies](docs/PACBREW.md) | Third-party PS5 libraries, selection, caching, and limits |
-| [Build output formats](docs/FFPKG.md) | Folder, `.ffpkg`, and `.ffpfsc` generation |
+| [Build output formats](docs/FFPKG.md) | Folder, ZIP, and `.ffpkg` generation; how a release is published |
 | [Native build tooling](docs/NATIVE_TOOLING.md) | LLVM boundary and C++ converter/FSELF commands |
 | [Clean-room runtime shim](docs/RUNTIME_SHIM.md) | Design, hashes, compatibility, and deterministic reproduction |
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
