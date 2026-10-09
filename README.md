@@ -271,8 +271,12 @@ git tag 01.002.003
 git push origin 01.002.003
 ```
 
-The workflow rejects a tag that differs from `contentVersion` and publishes
-the verified app-folder ZIP and its `SHA256SUMS` under that version. The ZIP contains
+Pushing the tag is how a release is made: the workflow rejects a tag that differs from
+`contentVersion`, then builds, attests and publishes the app-folder ZIP and its `SHA256SUMS`
+under that version. Release files are not attached by hand. If no release exists for the tag,
+the workflow creates it; if one exists without a ZIP (notes written in advance, or a draft), it
+adds the two files and leaves the title and notes alone; if one already has a ZIP, nothing is
+replaced and the run ends with a warning. The ZIP contains
 the complete application and generated `libc.prx`. A release ZIP built by the workflow can be
 checked with `gh attestation verify <ZIP> -R blackbearreloaded/ps5-native-app-boilerplate`
 (GitHub CLI); this covers releases built by GitHub Actions from now on, not earlier ones. See [Application

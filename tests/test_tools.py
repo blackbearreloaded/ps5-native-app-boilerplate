@@ -232,6 +232,18 @@ class ToolTests(unittest.TestCase):
         self.assertIn("run: make app", workflow)
         self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
         self.assertIn('assets=("release/$FOLDER_ZIP" "release/$CHECKSUM")', workflow)
+        # The release job creates a release, or fills one that has no ZIP; it never replaces,
+        # deletes or rewrites anything on a release that exists.
+        for forbidden in ("--clobber", "delete-asset", "gh release edit"):
+            self.assertNotIn(forbidden, workflow)
+        publish = workflow[workflow.index("- name: Publish GitHub release") :]
+        self.assertIn('gh release create "$TAG" ', publish)
+        self.assertIn('gh release upload "$TAG" ', publish)
+        self.assertIn("--json assets --jq '.assets[].name'", publish)
+        self.assertIn("if [[ $name == *.zip ]]; then", publish)
+        self.assertIn("::warning title=Release files not from this run::", publish)
+        self.assertLess(publish.index("gh release create"), publish.index("::warning"))
+        self.assertLess(publish.index("::warning"), publish.index("gh release upload"))
         # The finished ZIP, and only the ZIP, is attested before it is uploaded: pinned action,
         # never for a pull request or in a private repository.
         attest = workflow.index("- name: Attest the release ZIP")
