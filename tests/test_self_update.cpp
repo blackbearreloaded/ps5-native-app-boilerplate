@@ -161,6 +161,15 @@ struct World
     Console *console = nullptr;
     std::string manifest, signature = std::string(64, 'S'), app_file, archive;
     std::string extra; // more members for the app's catalog file, each starting with a comma
+    // The catalog's site: reachable, unreachable, or answering with a page that isn't the catalog.
+    enum class Site
+    {
+        working,
+        unreachable,
+        block_page
+    } site = Site::working;
+    bool mirror = false; // whether the mirror holds the same catalog
+    int site_requests = 0, mirror_requests = 0;
     int app_status = 200;
     uint64_t stored_sequence = 0;
     bool has_sequence = false, loader = true;
@@ -174,9 +183,30 @@ World *world = nullptr;
 
 int fake_fetch(void *, const char *url, char *body, size_t capacity, size_t *length, int *status)
 {
-    const std::string address = url;
+    std::string address = url;
     const std::string *source = nullptr;
+    static const std::string blocked = "<html>This site is blocked</html>";
     *status = 200;
+    const std::string mirror_api = UPDATE_CHECK_MIRROR_API;
+    if (address.rfind(mirror_api, 0) == 0)
+    {
+        ++world->mirror_requests;
+        if (!world->mirror)
+            return -1;
+        address = SELF_UPDATE_API + address.substr(mirror_api.size()); // the same catalog
+    }
+    else
+    {
+        ++world->site_requests;
+        if (world->site == World::Site::unreachable)
+            return -1;
+        if (world->site == World::Site::block_page)
+        {
+            std::memcpy(body, blocked.data(), blocked.size());
+            *length = blocked.size();
+            return 0;
+        }
+    }
     if (address == SELF_UPDATE_API "manifest.json")
         source = &world->manifest;
     else if (address == SELF_UPDATE_API "manifest.sig")
@@ -370,6 +400,57 @@ void test_pieces()
     CHECK(!member_number(json.data(), json.size(), "missing", &number));
     const std::string real = "{\"size\":1.5}";
     CHECK(!member_number(real.data(), real.size(), "size", &number));
+}
+
+// The catalog's mirror: asked when the site gives no catalog that verifies, trusted no further.
+void test_mirror()
+{
+    Console console;
+    World w;
+    w.console = &console;
+    world = &w;
+    const std::string archive = make_archive(title, "01.000.010", "new program");
+    publish(w, "01.000.010", archive, 80);
+    self_update_offer offer;
+
+    // The site answers: the mirror is never asked.
+    w.mirror = true;
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+    CHECK(w.site_requests == 3 && w.mirror_requests == 0);
+
+    // The site can't be reached: the mirror's signed catalog gives the same offer.
+    w.site = World::Site::unreachable;
+    w.site_requests = w.mirror_requests = 0;
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+    CHECK(std::string(offer.available) == "01.000.010" &&
+          std::string(offer.sha256) == digest_of(archive));
+    CHECK(w.site_requests == 1 && w.mirror_requests == 3);
+    CHECK(self_update_check(&platform, title, "01.000.010", &offer) == SELF_UPDATE_UP_TO_DATE);
+
+    // A network's block page answers for the site; it isn't the catalog, so the mirror is asked.
+    w.site = World::Site::block_page;
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
+
+    // The mirror is held to the same rules: an older catalog than one accepted is refused...
+    w.site = World::Site::unreachable;
+    publish(w, "01.000.010", archive, 79);
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_UNKNOWN);
+    CHECK(offer.artifact[0] == '\0' && offer.available[0] == '\0');
+    // ...and so is one whose signature doesn't verify, or whose app file isn't the one it lists.
+    publish(w, "01.000.010", archive, 80);
+    w.signature = std::string(64, 'X');
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_UNKNOWN);
+    w.signature = std::string(64, 'S');
+    w.app_file += " ";
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_UNKNOWN);
+
+    // Neither place answers: the result is the site's, and nothing is offered.
+    publish(w, "01.000.010", archive, 80);
+    w.mirror = false;
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_UNKNOWN);
+    w.site = World::Site::block_page;
+    CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_UNTRUSTED);
+    CHECK(offer.artifact[0] == '\0');
 }
 
 void test_check()
@@ -718,6 +799,7 @@ int main()
 {
     test_pieces();
     test_check();
+    test_mirror();
     test_update_applies();
     test_refusals();
     test_cancel_and_stuck_app();

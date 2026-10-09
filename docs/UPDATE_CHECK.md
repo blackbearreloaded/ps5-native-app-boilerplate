@@ -120,6 +120,37 @@ on the first check.
 `update_check_run_with` takes a transport of your own, for an app that already
 has an HTTP client, and is what the tests use.
 
+## When homebrew.page can't be reached
+
+Some networks block `homebrew.page`. The catalog publishes its API a second
+time, as a mirror, at
+
+```
+https://blackbearreloaded.github.io/ps5-homebrew-catalog/api/v1/
+```
+
+and the kit uses it by itself:
+
+- It asks `homebrew.page` first, every time.
+- It asks the mirror when that gives no usable answer: the request fails, the
+  status isn't 200, or the answer isn't the catalog's JSON (a network's block
+  page often answers 200 with a page of its own).
+- HTTP 404 from `homebrew.page` means "not listed" and is final; the mirror
+  isn't asked.
+- When neither place answers, the result is the one from `homebrew.page`.
+
+`result.origin` says which place answered: 0 for the site, 1 for the mirror.
+Nothing changes for the caller, and there is nothing to configure. An app that
+already has the kit gets the fallback by taking the new `update_check.c` and
+`update_check.h`.
+
+This check is a notification and trusts the answer as far as HTTPS goes, on
+either address. Installing an update goes through the signed catalog
+([Self-update](SELF_UPDATE.md)).
+
+The fallback is covered by the host tests (`make test-update-check`). It has
+not been run on a console, nor on a network that blocks the site.
+
 ## The transport: libcurl on the console
 
 The full guide to libcurl on the console (large downloads, elevated apps,

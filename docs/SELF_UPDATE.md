@@ -661,6 +661,28 @@ socket pair with real ZIP archives and real folders:
 
 The host test replaces the network, the Ed25519 check and the payload loader.
 
+## When homebrew.page can't be reached
+
+The catalog is also published, signed, at a mirror
+(`https://blackbearreloaded.github.io/ps5-homebrew-catalog/api/v1/`), for
+networks that block its site. `self_update_check` asks the site first and the
+mirror when the site gives no catalog that verifies: it can't be reached, or
+something else answers in its place.
+
+The mirror is held to exactly the same rules as the site. Its manifest must be
+signed by the catalog's keys, must not be older than one already accepted (the
+saved sequence is shared), and must list the very file it then serves. So the
+mirror can make the catalog reachable and nothing else. The update itself is
+still downloaded from the developer's GitHub release and checked against the
+SHA-256 in the signed catalog.
+
+When neither place gives an answer, the result is the site's and nothing is
+offered. There is nothing to configure; an app gets this by taking the new
+`self_update.c` and `self_update.h` together with the update-check kit's two
+files.
+
+Covered by the host tests (`make test-self-update`); not yet run on a console.
+
 ## Console validation
 
 The current implementation was exercised end to end on firmware 6.02 and

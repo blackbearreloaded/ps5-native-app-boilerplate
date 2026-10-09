@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 // The kit itself, without the console transport, compiled into this test.
 #define UPDATE_CHECK_NO_NETWORK
@@ -263,6 +264,89 @@ void test_run()
     update_check_run_with(fake_fetch, "PPSA99039", "01.000.000", nullptr); // must not crash
 }
 
+// The catalog's site, then its mirror: a table of what each place answers.
+struct Place
+{
+    int code = 0;
+    int status = 200;
+    std::string body;
+};
+Place site, mirror;
+std::vector<std::string> asked;
+
+int two_places(const char *url, const char *, char *body, std::size_t capacity, std::size_t *length,
+               int *http_status)
+{
+    asked.push_back(url);
+    const bool from_mirror = std::string(url).rfind(UPDATE_CHECK_MIRROR_API, 0) == 0;
+    const Place &place = from_mirror ? mirror : site;
+    *http_status = place.status;
+    if (place.code != 0)
+        return place.code;
+    if (place.body.size() > capacity)
+        return UPDATE_CHECK_FETCH_TOO_LARGE;
+    std::memcpy(body, place.body.data(), place.body.size());
+    *length = place.body.size();
+    return 0;
+}
+
+void test_mirror()
+{
+    char url[128];
+    CHECK(update_check_url_at(url, sizeof(url), "PPSA99039", 1) != 0);
+    CHECK(std::string(url) ==
+          "https://blackbearreloaded.github.io/ps5-homebrew-catalog/api/v1/apps/PPSA99039.json");
+    CHECK(update_check_url_at(url, sizeof(url), "PPSA99039", 2) == 0);
+    CHECK(update_check_api(2) == nullptr && std::string(update_check_api(0)) == UPDATE_CHECK_API);
+
+    const auto run_both = []
+    {
+        asked.clear();
+        update_check_result result{};
+        update_check_run_with(two_places, "PPSA99039", "01.000.000", &result);
+        return result;
+    };
+
+    // The site answers: the mirror is never asked.
+    site = Place{0, 200, listed};
+    mirror = Place{0, 200, listed};
+    auto result = run_both();
+    CHECK(result.state == UPDATE_CHECK_AVAILABLE && result.origin == 0 && asked.size() == 1);
+
+    // The site can't be reached: the mirror's answer is used.
+    site = Place{static_cast<int>(0x80431068), 0, ""};
+    result = run_both();
+    CHECK(result.state == UPDATE_CHECK_AVAILABLE && result.origin == 1 && asked.size() == 2);
+    CHECK(result.reason == UPDATE_CHECK_OK && result.http_status == 200 &&
+          result.platform_error == 0);
+    CHECK(asked[0].rfind(UPDATE_CHECK_API, 0) == 0 &&
+          asked[1].rfind(UPDATE_CHECK_MIRROR_API, 0) == 0);
+
+    // A network's block page answers 200 with something that isn't the catalog.
+    site = Place{0, 200, "<html>This site is blocked</html>"};
+    result = run_both();
+    CHECK(result.state == UPDATE_CHECK_AVAILABLE && result.origin == 1);
+    site = Place{0, 403, "blocked"};
+    result = run_both();
+    CHECK(result.state == UPDATE_CHECK_AVAILABLE && result.origin == 1);
+
+    // "Not listed" is the site's answer, not a failure: the mirror is not asked.
+    site = Place{0, 404, "not found"};
+    result = run_both();
+    CHECK(result.reason == UPDATE_CHECK_NOT_LISTED && result.origin == 0 && asked.size() == 1);
+
+    // Neither place answers: the failure reported is the site's.
+    site = Place{static_cast<int>(0x80431068), 0, ""};
+    mirror = Place{-7, 0, ""};
+    result = run_both();
+    CHECK(result.state == UPDATE_CHECK_UNKNOWN && result.reason == UPDATE_CHECK_NETWORK &&
+          result.platform_error == static_cast<int>(0x80431068) && result.origin == 0 &&
+          asked.size() == 2);
+    mirror = Place{0, 200, "<html>also blocked</html>"};
+    result = run_both();
+    CHECK(result.state == UPDATE_CHECK_UNKNOWN && result.reason == UPDATE_CHECK_NETWORK);
+}
+
 // Whatever arrives, the kit must neither crash nor claim an update it can't justify.
 void test_hostile_input()
 {
@@ -301,6 +385,7 @@ int main()
     test_json();
     test_evaluate();
     test_run();
+    test_mirror();
     test_hostile_input();
     for (int reason = UPDATE_CHECK_OK; reason <= UPDATE_CHECK_NO_CATALOG_VERSION; ++reason)
         CHECK(std::strcmp(update_check_reason_text(static_cast<update_check_reason>(reason)),
