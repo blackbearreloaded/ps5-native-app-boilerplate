@@ -533,6 +533,13 @@ void test_update_applies()
     World w;
     w.console = &console;
     world = &w;
+    // The version an update replaces is kept here; what an earlier update kept goes.
+    const std::string previous = console.drive + "/previous",
+                      kept = previous + "/" + title + "-backup";
+    console.environment.previous = previous;
+    CHECK(mkdir(previous.c_str(), 0755) == 0 && mkdir(kept.c_str(), 0755) == 0);
+    write_file(kept + "/eboot.bin", "the version before the old one");
+    write_file(kept + "/stale.txt", "from an earlier update");
     publish(w, "01.000.010", make_archive(title, "01.000.010", "new program"), 5);
     self_update_offer offer;
     CHECK(self_update_check(&platform, title, "01.000.000", &offer) == SELF_UPDATE_AVAILABLE);
@@ -570,6 +577,12 @@ void test_update_applies()
     CHECK(self_update::kind(console.target + "/assets/old.txt") == self_update::Kind::absent);
     CHECK(read_file(console.target + "/user-note.txt") == "keep me");
     CHECK(self_update::kind(console.drive + "/self-update") == self_update::Kind::absent);
+    // The replaced version is kept whole; what the release did not replace was never moved.
+    CHECK(read_file(kept + "/eboot.bin") == "old program");
+    CHECK(read_file(kept + "/sce_sys/param.json") == param_json(title, "01.000.000"));
+    CHECK(read_file(kept + "/assets/old.txt") == "left over from the old version");
+    CHECK(self_update::kind(kept + "/user-note.txt") == self_update::Kind::absent);
+    CHECK(self_update::kind(kept + "/stale.txt") == self_update::Kind::absent);
     CHECK(read_file(console.registered + "/appmeta/" + title + "/param.json") ==
           param_json(title, "01.000.010"));
     CHECK(console.notices.size() == 1 &&
@@ -793,6 +806,48 @@ void test_swap_rolls_back()
     CHECK(mkdir(console.sandbox.c_str(), 0755) == 0); // for the fixture's own cleanup
     CHECK(rmdir(console.sandbox.c_str()) == 0);
 }
+// The kept version goes to another drive as a copy: every file with its mode, links left out.
+void test_move_to_another_drive()
+{
+    char here_pattern[] = "/tmp/self-update-move-XXXXXX",
+         there_pattern[] = "/dev/shm/self-update-move-XXXXXX";
+    const char *here = mkdtemp(here_pattern);
+    const char *there = mkdtemp(there_pattern);
+    struct stat a
+    {
+    };
+    struct stat b
+    {
+    };
+    if (here == nullptr || there == nullptr || stat(here, &a) != 0 || stat(there, &b) != 0 ||
+        a.st_dev == b.st_dev)
+    {
+        std::fprintf(stderr, "no second drive here: the copy to another drive was not checked\n");
+        if (here != nullptr)
+            (void)self_update::remove_tree(here);
+        if (there != nullptr)
+            (void)self_update::remove_tree(there);
+        return;
+    }
+    const std::string from = std::string(here) + "/backup", to = std::string(there) + "/kept";
+    CHECK(mkdir(from.c_str(), 0755) == 0 && mkdir((from + "/sce_sys").c_str(), 0777) == 0);
+    write_file(from + "/eboot.bin", "old program");
+    write_file(from + "/sce_sys/param.json", param_json(title, "01.000.000"));
+    CHECK(chmod((from + "/eboot.bin").c_str(), 0777) == 0 &&
+          chmod((from + "/sce_sys").c_str(), 0777) == 0);
+    CHECK(symlink("/etc/passwd", (from + "/link").c_str()) == 0);
+    CHECK(self_update::move_tree(from, to));
+    CHECK(read_file(to + "/eboot.bin") == "old program");
+    CHECK(read_file(to + "/sce_sys/param.json") == param_json(title, "01.000.000"));
+    CHECK(stat((to + "/eboot.bin").c_str(), &a) == 0 && (a.st_mode & 0777) == 0777);
+    CHECK(stat((to + "/sce_sys").c_str(), &a) == 0 && (a.st_mode & 0777) == 0777);
+    CHECK(self_update::kind(to + "/link") == self_update::Kind::absent);
+    CHECK(self_update::kind(from) == self_update::Kind::absent);
+    // Nothing is moved onto a folder that exists.
+    CHECK(mkdir(from.c_str(), 0755) == 0 && !self_update::move_tree(from, to));
+    CHECK(self_update::remove_tree(here) && self_update::remove_tree(there));
+}
+
 } // namespace
 
 int main()
@@ -804,6 +859,7 @@ int main()
     test_refusals();
     test_cancel_and_stuck_app();
     test_swap_rolls_back();
+    test_move_to_another_drive();
     if (failures != 0)
     {
         std::fprintf(stderr, "%d self-update check(s) failed\n", failures);
