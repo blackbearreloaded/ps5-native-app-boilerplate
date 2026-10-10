@@ -565,6 +565,16 @@ removes everything it wrote. A refusal is one line, for example
 - **Save the user's state before closing.** `/download0` isn't touched by an
   update. At the app folder's top level, entries present in the release replace
   entries of the same name; entries absent from the release are preserved.
+- **The version an update replaces is kept**, so the user can put it back by
+  hand if the new one misbehaves: the replaced entries, as they were, in
+  `<previous>/<TITLEID>-backup`. Only the latest one is kept; the next update
+  replaces it. `previous` is `self_update::Environment::previous`, set in the
+  helper's `main.cpp` (the example uses `/data/self-update-previous`); its
+  parent folder must exist. Point it at your app's own data folder, or leave
+  it empty to delete the replaced files as before. When that folder is on
+  another drive than the app, the files are copied there with their modes.
+  Putting the version back is a copy of that folder's contents over the app's
+  folder while the app is closed.
 
 ## What it needs on the console
 
