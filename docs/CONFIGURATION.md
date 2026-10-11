@@ -69,6 +69,15 @@ The build validates these combinations but does not rewrite them. Category does
 not grant codec, filesystem, network, background-execution, or other
 entitlements.
 
+## HDR and VRR
+
+`attribute` and `attribute3` tell the console how the app's picture should be
+shown. The template declares HDR output and no VRR (`1644167168` and
+`1048576`), which opens without the black second a title with `0` and `0`
+shows on a console that has VRR switched on. A game with a variable frame rate
+or a 120 Hz mode needs other values, and pays for them with that black second:
+see [HDR, VRR and the black second at launch](DISPLAY_MODES.md).
+
 ## Source and runtime conventions
 
 Every `.c`, `.cc`, and `.cpp` file below `src/` is compiled automatically.

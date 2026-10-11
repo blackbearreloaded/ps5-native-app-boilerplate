@@ -570,6 +570,7 @@ tools/find-missing-symbols.sh Lists libc symbols a PacBrew library needs that th
 | [Clean-room runtime shim](docs/RUNTIME_SHIM.md) | Design, hashes, compatibility, and deterministic reproduction |
 | [Deployment](docs/DEPLOYMENT.md) | FTP staging, title-scoped cleanup, and smoke testing |
 | [Platform constraints](docs/PLATFORM_NOTES.md) | Loader, filesystem, presentation, and capability boundaries |
+| [HDR, VRR and the black second at launch](docs/DISPLAY_MODES.md) | The two `param.json` fields that decide the launch video mode, measured values, and when VRR is worth it |
 | [Capability recipes](docs/RECIPES.md) | Focused patterns for storage, input, networking, AudioOut, SDL, and native libraries |
 | [User interface](docs/USER_INTERFACE.md) | Where the skeleton's CPU renderer stops, and the companion OpenGL kit (components, themes, screens) for real interfaces |
 | [Elevation protocol](docs/SANDBOX_ELEVATION.md) | Versioned elfldr capability requests, extension guide, and `/data` verification |
