@@ -48,8 +48,8 @@ is not linked into any PS5 application, runtime, or package artifact.
 ## Optional PS5-Lapy-JB-Daemon integration
 
 The sandbox-elevation build fetches
-[mpereiraesaa's PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon)
-at commit `54a095c0f19161825e845daa760a03b446e654fa`, invokes its unmodified
+[BlackBearReloaded's fork of PS5-Lapy-JB-Daemon](https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon)
+at commit `57fcc19b7f57e46c823d6f2a6c6233ebf3288079`, invokes its unmodified
 `owned-helper` target for the selected application's exact title and packages
 the generated helper ELF with Lapy's MIT license. The shared protocol header
 published upstream is LGPL-2.1-or-later; this repository's application-side
@@ -62,7 +62,7 @@ source is copied or modified here.
 
 The helper build also uses the pinned `ps5log/1` header from
 [mpereiraesaa/ps5-agc-gears](https://github.com/mpereiraesaa/ps5-agc-gears/tree/1ae1f9182abd2770c131b97419034fb85173c2dc/native/ps5log),
-GPL-3.0-or-later, and the official PS5 Payload SDK v0.40. Those build inputs
+GPL-3.0-or-later, and the official PS5 Payload SDK v0.42. Those build inputs
 remain under ignored `.deps/lapy/`; the normal application toolchain remains
 the separately pinned Payload SDK v0.42.
 
