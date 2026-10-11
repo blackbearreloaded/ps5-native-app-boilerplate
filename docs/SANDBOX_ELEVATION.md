@@ -85,11 +85,14 @@ failed `/data` proof never authorizes privileged work.
 
 `tools/build-lapy-helper.py` pins:
 
-- mpereiraesaa's Lapy commit
-  [`54a095c0f19161825e845daa760a03b446e654fa`](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/commit/54a095c0f19161825e845daa760a03b446e654fa),
-  proposed upstream in [PR #48](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/48);
-- official PS5 Payload SDK v0.40, used only for the helper because v0.41
-  changed the credential-attribute API; and
+- Lapy commit
+  [`57fcc19b7f57e46c823d6f2a6c6233ebf3288079`](https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon/commit/57fcc19b7f57e46c823d6f2a6c6233ebf3288079),
+  in BlackBearReloaded's fork, which carries the changes proposed upstream in PRs
+  [#48](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/48),
+  [#49](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/49) and
+  [#50](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/50);
+- official PS5 Payload SDK v0.42, used only for the helper; it knows firmware
+  13.40 to 13.60; and
 - the pinned `ps5log/1` header used by upstream's build.
 
 The normal boilerplate application build continues to use Payload SDK v0.42.
