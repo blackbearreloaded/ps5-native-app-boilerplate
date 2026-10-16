@@ -27,6 +27,18 @@ From the repository root, run the read-only host check:
 make doctor
 ```
 
+### macOS
+
+The host tests can run on macOS (Apple Silicon included) with Homebrew's `llvm@18`:
+`make test-update-check` has been run on an M2 Mac. On macOS the Makefile puts a small
+`sha256sum` stand-in on `PATH` (it calls `shasum`) and leaves out the Linux-only
+`--gc-sections` linker option.
+
+Building the PS5 app itself needs Linux: the payload SDK's compiler wrappers expect a Linux LLVM
+installation and its target runtime (`lib/linux/libclang_rt.builtins-x86_64.a`), which Apple's
+toolchain cannot stand in for. Build the app on Linux, in WSL, or with the repository's GitHub
+Actions workflow.
+
 ## 2. Native dependencies
 
 The first build downloads the pinned public
